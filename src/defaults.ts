@@ -39,7 +39,6 @@ export const PHILIPPINE_HOLIDAYS: string[] = [
     // 2027 (Q1 only — up to March 31)
     '2027-01-01', // New Year's Day (Regular)
     '2027-02-06', // Chinese New Year (Special Non-Working)
-    '2027-03-10', // Eid'l Fitr (Regular - Tentative, pending proclamation)
     '2027-03-25', // Maundy Thursday (Regular)
     '2027-03-26', // Good Friday (Regular)
     '2027-03-27', // Black Saturday (Special Non-Working)
@@ -72,7 +71,6 @@ export const HOLIDAY_NAMES: Record<string, string> = {
     '2026-12-31': 'Last Day of the Year',
     '2027-01-01': "New Year's Day",
     '2027-02-06': 'Chinese New Year',
-    '2027-03-10': "Eid'l Fitr",
     '2027-03-25': 'Maundy Thursday',
     '2027-03-26': 'Good Friday',
     '2027-03-27': 'Black Saturday',
@@ -95,19 +93,21 @@ export function holidaysForOjtWindow(year: number): string[] {
     return PHILIPPINE_HOLIDAYS.filter(
         (value) => value >= windowStart && value <= windowEnd,
     );
-}
-
-export function buildDefaultSettings(): Settings {
+} export function buildDefaultSettings(): Settings {
     const now = new Date();
     const year = now.getFullYear();
-    // Local date (toISOString() is UTC and gives yesterday before 8 AM in the PH).
     const todayIso = formatDateForInput(now);
+
+    // If we're past March, assume next year's window
+    const deadlineYear = now.getMonth() > 2 ? year + 1 : year;
+    const endStr = `${deadlineYear}-03-26`;
+
 
     return {
         requiredHours: 486,
         startDate: todayIso,
-        deadline: `${year + 1}-04-01`,
-        lastRenderDay: `${year + 1}-03-31`,
+        deadline: endStr,
+        lastRenderDay: endStr, // Now exactly the same
         allowedWorkdays: [true, true, true, true, true, false, false],
         holidays: holidaysForOjtWindow(year),
         customExclusions: [],

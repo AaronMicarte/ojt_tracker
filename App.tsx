@@ -33,6 +33,7 @@ import {
   computeProjection,
   formatDateForInput,
   getDayHoursFromEntry,
+  isBeforeStart,
   isFutureDate,
   isRenderDay,
   parseDateOnly,
@@ -69,7 +70,6 @@ const MONTH_LABELS = [
 ];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-// Excluded dates get their own color so they differ from "Missed" (orange).
 const EXCLUDED = {
   bg: colors.neutralSoft,
   fg: colors.neutral,
@@ -151,7 +151,7 @@ function suggestionDate(dateKey: string, field: TimeFieldKey): Date {
 
 function getMonthMatrix(year: number, month: number): (string | null)[] {
   const first = new Date(year, month, 1);
-  const startWeekday = first.getDay(); // Sun = 0, Mon = 1, ... Sat = 6
+  const startWeekday = first.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells: (string | null)[] = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
@@ -162,7 +162,6 @@ function getMonthMatrix(year: number, month: number): (string | null)[] {
   return cells;
 }
 
-// Pulls the JSON out of a backup even if it has the "Backup file for OJT Tracker" header line.
 function extractJson(text: string): string {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
@@ -586,6 +585,13 @@ function Root() {
       Alert.alert('Future date', 'You can only log today or earlier.');
       return;
     }
+    if (isBeforeStart(key, appData.settings)) {
+      Alert.alert(
+        'Before your OJT start',
+        `Your OJT starts on ${formatDateLabel(appData.settings.startDate)}. You can't log earlier than that.`,
+      );
+      return;
+    }
     const go = () => {
       setSelectedDate(key);
       after?.();
@@ -627,6 +633,13 @@ function Root() {
 
     if (isFutureDate(entry.date, new Date())) {
       Alert.alert('Invalid date', 'Future dates are not allowed.');
+      return;
+    }
+    if (isBeforeStart(entry.date, appData.settings)) {
+      Alert.alert(
+        'Before your OJT start',
+        `Your OJT starts on ${formatDateLabel(appData.settings.startDate)}. You can't log earlier than that.`,
+      );
       return;
     }
 
@@ -892,7 +905,6 @@ function Root() {
     });
   };
 
-  // No render days left but hours still remain: "0.0h needed" would be misleading.
   const noDaysLeft =
     projection.status !== 'complete' &&
     projection.workingDaysLeft === 0 &&
@@ -973,24 +985,20 @@ function Root() {
         <CardTitle
           icon="calendar-outline"
           title="Dates"
-          hint="Check these. The deadline and last render day are pre-filled and may not match your school."
+          hint="The deadline and last render day are the same. Pick your end date here."
         />
         <DateField
           label="OJT start date"
           value={appData.settings.startDate}
           onChange={(v) => updateSettings({ startDate: v })}
         />
+
+        {/* Merged Deadline & Last Render Day */}
         <DateField
-          label="Deadline"
+          label="Deadline & Last render day"
           value={appData.settings.deadline}
           minimumDate={appData.settings.startDate ? parseDateOnly(appData.settings.startDate) : undefined}
-          onChange={(v) => updateSettings({ deadline: v })}
-        />
-        <DateField
-          label="Last render day"
-          value={appData.settings.lastRenderDay}
-          minimumDate={appData.settings.startDate ? parseDateOnly(appData.settings.startDate) : undefined}
-          onChange={(v) => updateSettings({ lastRenderDay: v })}
+          onChange={(v) => updateSettings({ deadline: v, lastRenderDay: v })}
         />
       </Card>
 
@@ -1183,6 +1191,7 @@ function Root() {
               mode="date"
               value={parseDateOnly(selectedDate)}
               maximumDate={new Date()}
+              minimumDate={appData.settings.startDate ? parseDateOnly(appData.settings.startDate) : undefined}
               onCancel={() => setShowDatePicker(false)}
               onConfirm={(picked) => {
                 setShowDatePicker(false);
@@ -1328,6 +1337,9 @@ function Root() {
     const detailEntry = calendarDetailDate ? appData.entries[calendarDetailDate] : undefined;
     const detailHours = detailEntry ? getDayHoursFromEntry(detailEntry) : 0;
     const detailFuture = calendarDetailDate ? isFutureDate(calendarDetailDate, new Date()) : false;
+    const detailBeforeStart = calendarDetailDate
+      ? isBeforeStart(calendarDetailDate, appData.settings)
+      : false;
     const detailRender = calendarDetailDate
       ? isRenderDay(calendarDetailDate, appData.settings)
       : false;
@@ -1350,6 +1362,15 @@ function Root() {
         <Ionicons name="ban-outline" size={16} color={EXCLUDED.fg} />
         <Text style={[styles.reasonText, { color: EXCLUDED.fg }]}>
           Excluded date (you added this)
+        </Text>
+      </View>
+    ) : null;
+
+    const beforeStartBox = detailBeforeStart ? (
+      <View style={[styles.reasonBox, { backgroundColor: colors.neutralSoft }]}>
+        <Ionicons name="calendar-outline" size={16} color={colors.neutral} />
+        <Text style={[styles.reasonText, { color: colors.textSecondary }]}>
+          Before your OJT start ({formatDateLabel(appData.settings.startDate)})
         </Text>
       </View>
     ) : null;
@@ -1393,11 +1414,13 @@ function Root() {
             const renderDay = isRenderDay(key, appData.settings);
             const isToday = key === todayKey;
             const isFuture = isFutureDate(key, new Date());
+            const beforeStart = isBeforeStart(key, appData.settings);
             const missed =
               !hasHours &&
               renderDay &&
               !isFuture &&
               !isToday &&
+              !beforeStart &&
               !!appData.settings.startDate &&
               key >= appData.settings.startDate;
             const isHoliday = appData.settings.holidays.includes(key);
@@ -1420,6 +1443,7 @@ function Root() {
                     !renderDay && !hasHours && styles.calCircleOff,
                     isHoliday && !hasHours && styles.calCircleHoliday,
                     isCustomExcluded && !hasHours && styles.calCircleExcluded,
+                    beforeStart && !hasHours && { opacity: 0.35 },
                   ]}
                 >
                   <Text
@@ -1430,6 +1454,7 @@ function Root() {
                       !renderDay && !hasHours && styles.calDayNumExcluded,
                       isHoliday && !hasHours && { color: colors.danger, fontWeight: '800' },
                       isCustomExcluded && !hasHours && { color: EXCLUDED.fg, fontWeight: '800' },
+                      beforeStart && !hasHours && { color: colors.textSecondary },
                     ]}
                   >
                     {Number(key.split('-')[2])}
@@ -1517,6 +1542,7 @@ function Root() {
 
                     {holidayBox}
                     {excludedBox}
+                    {beforeStartBox}
 
                     {detailEntry.notes ? (
                       <View style={styles.notesBox}>
@@ -1548,7 +1574,8 @@ function Root() {
                     </Text>
                     {holidayBox}
                     {excludedBox}
-                    {!detailRender && !detailHolidayName && !detailCustomExcluded ? (
+                    {beforeStartBox}
+                    {!detailRender && !detailHolidayName && !detailCustomExcluded && !detailBeforeStart ? (
                       <View style={[styles.reasonBox, { backgroundColor: '#F1F5F9' }]}>
                         <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
                         <Text style={[styles.reasonText, { color: colors.textSecondary }]}>
@@ -1560,7 +1587,7 @@ function Root() {
                       <Btn
                         label="Log this day"
                         icon="add"
-                        disabled={detailFuture}
+                        disabled={detailFuture || detailBeforeStart}
                         onPress={() => editFromCalendar(calendarDetailDate)}
                         style={{ flex: 1 }}
                       />
@@ -1633,26 +1660,60 @@ function Root() {
           <CardTitle icon="briefcase-outline" title="Workdays" />
           {renderWorkdayChips()}
         </Card>
-
         <Card>
           <CardTitle
             icon="ban-outline"
             title="Excluded dates"
-            hint="Typhoon, suspension, or any day you won't render."
+            hint="Tap a date to remove it. Add your own below."
           />
-          <AddExclusionButton
-            onPick={(dateKey) => {
-              if (appData.settings.customExclusions.includes(dateKey)) {
-                Alert.alert('Already added', 'That date is already excluded.');
-                return;
-              }
-              updateSettings({
-                customExclusions: [...appData.settings.customExclusions, dateKey].sort(),
-              });
-            }}
-          />
+
+          {/* Built-in Holidays (Interactive) */}
+          <Text style={[styles.label, { marginTop: 0 }]}>Built-in holidays</Text>
+          <Text style={styles.inputHint}>
+            Tap to remove if your company works on these days.
+          </Text>
+          <View style={styles.tagContainer}>
+            {appData.settings.holidays.length === 0 ? (
+              <Text style={styles.metaText}>No built-in holidays remaining.</Text>
+            ) : (
+              appData.settings.holidays.map((value) => (
+                <Pressable
+                  key={value}
+                  accessibilityLabel={`Remove ${formatDateLabel(value)}`}
+                  style={[styles.tag, styles.tagMuted]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Remove built-in holiday?',
+                      `Are you sure you want to remove ${formatDateLabel(value)}? You will be expected to render on this day.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Remove',
+                          style: 'destructive',
+                          onPress: () => {
+                            updateSettings({
+                              holidays: appData.settings.holidays.filter((d) => d !== value),
+                            });
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={[styles.tagText, styles.tagTextMuted]}>
+                    {formatDateLabel(value)}
+                    {HOLIDAY_NAMES[value] ? ` · ${HOLIDAY_NAMES[value]}` : ''}
+                  </Text>
+                  <Ionicons name="close" size={14} color={colors.textSecondary} />
+                </Pressable>
+              ))
+            )}
+          </View>
+
+          {/* Custom Exclusions */}
+          <Text style={[styles.label, { marginTop: space.lg }]}>Your custom exclusions</Text>
           {appData.settings.customExclusions.length === 0 ? (
-            <Text style={styles.metaText}>No excluded dates yet.</Text>
+            <Text style={styles.metaText}>No custom exclusions yet.</Text>
           ) : (
             <View style={styles.tagContainer}>
               {appData.settings.customExclusions.map((value) => (
@@ -1660,34 +1721,71 @@ function Root() {
                   key={value}
                   accessibilityLabel={`Remove ${formatDateLabel(value)}`}
                   style={styles.tag}
-                  onPress={() => removeCustomExclusion(value)}
+                  onPress={() => {
+                    Alert.alert(
+                      'Remove exclusion?',
+                      `Remove ${formatDateLabel(value)} from your excluded dates?`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Remove',
+                          style: 'destructive',
+                          onPress: () => {
+                            const nextNames = { ...appData.settings.customExclusionNames };
+                            delete nextNames[value];
+                            updateSettings({
+                              customExclusions: appData.settings.customExclusions.filter((item) => item !== value),
+                              customExclusionNames: nextNames,
+                            });
+                          },
+                        },
+                      ]
+                    );
+                  }}
                 >
-                  <Text style={styles.tagText}>{formatDateLabel(value)}</Text>
+                  <Text style={styles.tagText}>
+                    {formatDateLabel(value)}
+                    {appData.settings.customExclusionNames?.[value] ? ` · ${appData.settings.customExclusionNames[value]}` : ''}
+                  </Text>
                   <Ionicons name="close" size={14} color={colors.textPrimary} />
                 </Pressable>
               ))}
             </View>
           )}
 
-          <Text style={[styles.label, { marginTop: space.lg }]}>Built-in holidays</Text>
-          <Text style={styles.inputHint}>
-            From the PH holiday list (up to March 2027). These are excluded automatically. Add
-            anything later under Excluded dates.
-          </Text>
-          <View style={styles.tagContainer}>
-            {appData.settings.holidays.length === 0 ? (
-              <Text style={styles.metaText}>No holidays in the current window.</Text>
-            ) : (
-              appData.settings.holidays.map((value) => (
-                <View key={value} style={[styles.tag, styles.tagMuted]}>
-                  <Text style={[styles.tagText, styles.tagTextMuted]}>
-                    {HOLIDAY_NAMES[value]
-                      ? `${formatDateLabel(value)} · ${HOLIDAY_NAMES[value]}`
-                      : formatDateLabel(value)}
-                  </Text>
-                </View>
-              ))
-            )}
+          {/* Add Custom Exclusion (with name prompt) */}
+          <View style={{ marginTop: space.md }}>
+            <AddExclusionButton
+              onPick={(dateKey) => {
+                if (appData.settings.customExclusions.includes(dateKey) || appData.settings.holidays.includes(dateKey)) {
+                  Alert.alert('Already added', 'That date is already excluded.');
+                  return;
+                }
+
+                // Show prompt for the name
+                Alert.prompt(
+                  'Name this exclusion',
+                  `Why are you excluding ${formatDateLabel(dateKey)}? (e.g. Typhoon, Company Event)`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Save',
+                      onPress: (name) => {
+                        const nextNames = { ...appData.settings.customExclusionNames };
+                        if (name && name.trim()) {
+                          nextNames[dateKey] = name.trim();
+                        }
+                        updateSettings({
+                          customExclusions: [...appData.settings.customExclusions, dateKey].sort(),
+                          customExclusionNames: nextNames,
+                        });
+                      },
+                    },
+                  ],
+                  'plain-text'
+                );
+              }}
+            />
           </View>
         </Card>
 

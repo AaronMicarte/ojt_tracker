@@ -24,6 +24,17 @@ export function isFutureDate(dateValue: string, today: Date): boolean {
     return candidate.getTime() > t.getTime();
 }
 
+// True when the date is earlier than the configured OJT start date.
+export function isBeforeStart(dateValue: string, settings: Settings): boolean {
+    if (!settings.startDate) return false;
+    const candidate = parseDateOnly(dateValue);
+    const start = parseDateOnly(settings.startDate);
+    if (Number.isNaN(candidate.getTime()) || Number.isNaN(start.getTime())) return false;
+    candidate.setHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
+    return candidate.getTime() < start.getTime();
+}
+
 export function isRenderDay(dateValue: string, settings: Settings): boolean {
     const date = parseDateOnly(dateValue);
     const lastRenderDay = parseDateOnly(settings.lastRenderDay);
@@ -77,16 +88,6 @@ function hasHoursOn(entries: Record<string, DayEntry>, key: string): boolean {
     return !!entry && getDayHoursFromEntry(entry) > 0;
 }
 
-// Counting starts tomorrow once today already has hours logged,
-// so today is never counted twice (as rendered AND as a day left).
-function countingStart(entries: Record<string, DayEntry>, today: Date): Date {
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    if (hasHoursOn(entries, formatDateForInput(start))) {
-        start.setDate(start.getDate() + 1);
-    }
-    return start;
-}
-
 export function workingDaysLeftFromToday(
     settings: Settings,
     today: Date,
@@ -96,7 +97,14 @@ export function workingDaysLeftFromToday(
     if (Number.isNaN(lastRender.getTime())) return 0;
 
     let count = 0;
-    const start = countingStart(entries, today);
+
+    // Start counting from today
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // If you already logged hours today, start counting from TOMORROW
+    if (hasHoursOn(entries, formatDateForInput(start))) {
+        start.setDate(start.getDate() + 1);
+    }
 
     for (
         let current = new Date(start);
@@ -121,7 +129,6 @@ export function computeProjection(
     );
     const hoursRemaining = Math.max(0, settings.requiredHours - totalHoursRendered);
 
-    // Every day with hours counts, so the average always matches the total.
     const workdaysRendered = entriesList.filter(
         (entry) => getDayHoursFromEntry(entry) > 0,
     ).length;
@@ -162,10 +169,15 @@ export function computeProjection(
 
     const workdaysNeeded = Math.ceil(hoursRemaining / avgPerWorkday);
 
-    // Walk forward, skipping non-render days, to find the projected finish.
     let remaining = workdaysNeeded;
     const lastRenderDate = parseDateOnly(settings.lastRenderDay);
-    const start = countingStart(entries, today);
+
+    // For the projection loop, we use the exact same starting rule
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (hasHoursOn(entries, formatDateForInput(start))) {
+        start.setDate(start.getDate() + 1);
+    }
+
     let projectedDate = new Date(start);
 
     for (

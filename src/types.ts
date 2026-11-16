@@ -8,6 +8,7 @@ export interface Settings {
     allowedWorkdays: boolean[];
     holidays: string[];
     customExclusions: string[];
+    customExclusionNames?: Record<string, string>; // NEW
     maxHoursPerDay: number;
 }
 
