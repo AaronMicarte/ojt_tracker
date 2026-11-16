@@ -16,29 +16,6 @@ export function getWeekdayIndex(date: Date): number {
     return (date.getDay() + 6) % 7; // Mon = 0 ... Sun = 6
 }
 
-export function formatDisplayDate(dateValue: string): string {
-    const [year, month, day] = dateValue.split('-').map(Number);
-    if (!year || !month || !day) return '—';
-    const date = new Date(year, month - 1, day);
-    return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-    }).format(date);
-}
-
-export function formatDisplayTime(isoValue: string | null): string {
-    if (!isoValue) return '—';
-    const date = new Date(isoValue);
-    if (Number.isNaN(date.getTime())) return '—';
-    return new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Asia/Manila',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-    }).format(date);
-}
-
 export function isFutureDate(dateValue: string, today: Date): boolean {
     const candidate = parseDateOnly(dateValue);
     candidate.setHours(0, 0, 0, 0);
@@ -61,20 +38,6 @@ export function isRenderDay(dateValue: string, settings: Settings): boolean {
     if (settings.customExclusions.includes(dateKey)) return false;
 
     return true;
-}
-
-export function workingDaysLeftFromToday(settings: Settings, today: Date): number {
-    const lastRender = parseDateOnly(settings.lastRenderDay);
-    if (Number.isNaN(lastRender.getTime())) return 0;
-
-    let count = 0;
-    const cursor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-    for (let current = new Date(cursor); current <= lastRender; current.setDate(current.getDate() + 1)) {
-        if (isRenderDay(formatDateForInput(current), settings)) count += 1;
-    }
-
-    return count;
 }
 
 export function getDayHoursFromEntry(entry: DayEntry): number {
@@ -109,6 +72,43 @@ export function buildEntry(date: string): DayEntry {
     };
 }
 
+function hasHoursOn(entries: Record<string, DayEntry>, key: string): boolean {
+    const entry = entries[key];
+    return !!entry && getDayHoursFromEntry(entry) > 0;
+}
+
+// Counting starts tomorrow once today already has hours logged,
+// so today is never counted twice (as rendered AND as a day left).
+function countingStart(entries: Record<string, DayEntry>, today: Date): Date {
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (hasHoursOn(entries, formatDateForInput(start))) {
+        start.setDate(start.getDate() + 1);
+    }
+    return start;
+}
+
+export function workingDaysLeftFromToday(
+    settings: Settings,
+    today: Date,
+    entries: Record<string, DayEntry> = {},
+): number {
+    const lastRender = parseDateOnly(settings.lastRenderDay);
+    if (Number.isNaN(lastRender.getTime())) return 0;
+
+    let count = 0;
+    const start = countingStart(entries, today);
+
+    for (
+        let current = new Date(start);
+        current <= lastRender;
+        current.setDate(current.getDate() + 1)
+    ) {
+        if (isRenderDay(formatDateForInput(current), settings)) count += 1;
+    }
+
+    return count;
+}
+
 export function computeProjection(
     settings: Settings,
     entries: Record<string, DayEntry>,
@@ -120,11 +120,15 @@ export function computeProjection(
         0,
     );
     const hoursRemaining = Math.max(0, settings.requiredHours - totalHoursRendered);
-    const workdaysRendered = entriesList.filter((entry) =>
-        isRenderDay(entry.date, settings),
+
+    // Every day with hours counts, so the average always matches the total.
+    const workdaysRendered = entriesList.filter(
+        (entry) => getDayHoursFromEntry(entry) > 0,
     ).length;
-    const workingDaysLeft = workingDaysLeftFromToday(settings, today);
+
+    const workingDaysLeft = workingDaysLeftFromToday(settings, today, entries);
     const hoursPerDayNeeded = workingDaysLeft > 0 ? hoursRemaining / workingDaysLeft : 0;
+    const avgPerWorkday = workdaysRendered > 0 ? totalHoursRendered / workdaysRendered : null;
 
     if (totalHoursRendered >= settings.requiredHours) {
         return {
@@ -132,7 +136,7 @@ export function computeProjection(
             hoursRemaining: 0,
             workingDaysLeft,
             hoursPerDayNeeded: 0,
-            avgPerWorkday: workdaysRendered > 0 ? totalHoursRendered / workdaysRendered : null,
+            avgPerWorkday,
             projectedFinish: 'Complete 🎉',
             status: 'complete',
             bufferOrDeficit: 0,
@@ -141,10 +145,6 @@ export function computeProjection(
         };
     }
 
-    const avgPerWorkday = workdaysRendered > 0 ? totalHoursRendered / workdaysRendered : null;
-
-    // Not enough data: no rendered days yet, or zero average.
-    // (Unlocked after the first rendered day so the projection shows immediately.)
     if (workdaysRendered < 1 || !avgPerWorkday || avgPerWorkday <= 0) {
         return {
             totalHoursRendered,
@@ -162,18 +162,18 @@ export function computeProjection(
 
     const workdaysNeeded = Math.ceil(hoursRemaining / avgPerWorkday);
 
-    // Walk forward from today, skipping non-render days, to find the projected finish.
+    // Walk forward, skipping non-render days, to find the projected finish.
     let remaining = workdaysNeeded;
     const lastRenderDate = parseDateOnly(settings.lastRenderDay);
-    let projectedDate = new Date(today);
+    const start = countingStart(entries, today);
+    let projectedDate = new Date(start);
 
     for (
-        let cursor = new Date(today);
+        let cursor = new Date(start);
         cursor <= lastRenderDate;
         cursor.setDate(cursor.getDate() + 1)
     ) {
-        const key = formatDateForInput(cursor);
-        if (isRenderDay(key, settings)) {
+        if (isRenderDay(formatDateForInput(cursor), settings)) {
             remaining -= 1;
             projectedDate = new Date(cursor);
             if (remaining <= 0) break;
@@ -182,7 +182,6 @@ export function computeProjection(
 
     const projectedFinish = remaining <= 0 ? formatDateForInput(projectedDate) : null;
     const status: ProjectionResult['status'] = projectedFinish ? 'on-track' : 'behind';
-    const bufferOrDeficit = workingDaysLeft - workdaysNeeded;
 
     return {
         totalHoursRendered,
@@ -192,17 +191,8 @@ export function computeProjection(
         avgPerWorkday,
         projectedFinish,
         status,
-        bufferOrDeficit,
+        bufferOrDeficit: workingDaysLeft - workdaysNeeded,
         daysNeeded: workdaysNeeded,
         workdaysRendered,
     };
-}
-
-export function isoDateComparer(a: string, b: string): number {
-    return parseDateOnly(a).getTime() - parseDateOnly(b).getTime();
-}
-
-export function sanitizeNumericInput(value: string, fallback: number): number {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
 }

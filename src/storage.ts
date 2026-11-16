@@ -33,9 +33,19 @@ export async function exportJsonBackup(data: AppData): Promise<string> {
 }
 
 export async function importJsonBackup(data: string): Promise<AppData> {
-    const parsed = JSON.parse(data) as AppData;
+    const parsed = JSON.parse(data) as Partial<AppData>;
     if (!parsed || typeof parsed !== 'object' || !parsed.settings) {
         throw new Error('Invalid backup file');
     }
-    return { ...buildEmptyData(), ...parsed, schemaVersion: 1 };
+
+    const base = buildEmptyData();
+    return {
+        ...base,
+        ...parsed,
+        // merge settings so older backups missing newer fields don't crash the app
+        settings: { ...base.settings, ...parsed.settings },
+        entries:
+            parsed.entries && typeof parsed.entries === 'object' ? parsed.entries : {},
+        schemaVersion: 1,
+    };
 }

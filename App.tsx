@@ -69,6 +69,12 @@ const MONTH_LABELS = [
 ];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// Excluded dates get their own color so they differ from "Missed" (orange).
+const EXCLUDED = {
+  bg: colors.neutralSoft,
+  fg: colors.neutral,
+};
+
 const TIME_SUGGESTIONS: Record<TimeFieldKey, { h: number; m: number }> = {
   amTimeIn: { h: 8, m: 0 },
   amTimeOut: { h: 12, m: 0 },
@@ -154,6 +160,13 @@ function getMonthMatrix(year: number, month: number): (string | null)[] {
   }
   while (cells.length % 7 !== 0) cells.push(null);
   return cells;
+}
+
+// Pulls the JSON out of a backup even if it has the "Backup file for OJT Tracker" header line.
+function extractJson(text: string): string {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  return start >= 0 && end > start ? text.slice(start, end + 1) : text;
 }
 
 // ---------- small UI pieces ----------
@@ -471,6 +484,8 @@ function Root() {
   const [reminderOn, setReminderOn] = useState(false);
   const [kbVisible, setKbVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [showPasteImport, setShowPasteImport] = useState(false);
+  const [pasteText, setPasteText] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const todayKey = formatDateForInput(new Date());
@@ -720,17 +735,30 @@ function Root() {
     }
   };
 
-  const runImport = async () => {
+  const restoreFromText = async (text: string): Promise<boolean> => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
+      const imported = await importJsonBackup(extractJson(text.trim()));
+      setAppData(imported);
+      showToast('Backup restored');
+      return true;
+    } catch {
+      Alert.alert(
+        'Import failed',
+        'That backup could not be restored. Make sure you copied the whole backup text.',
+      );
+      return false;
+    }
+  };
+
+  const runImportFromFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
       if (result.canceled || !result.assets?.length) return;
       const response = await fetch(result.assets[0].uri);
       const text = await response.text();
-      const imported = await importJsonBackup(text);
-      setAppData(imported);
-      showToast('Backup restored');
+      await restoreFromText(text);
     } catch {
-      Alert.alert('Import failed', 'The selected backup file could not be restored.');
+      Alert.alert('Import failed', 'The selected file could not be read.');
     }
   };
 
@@ -740,9 +768,22 @@ function Root() {
       'Importing a backup replaces everything on this device.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Choose file', style: 'destructive', onPress: runImport },
+        { text: 'Paste text', style: 'destructive', onPress: () => setShowPasteImport(true) },
+        { text: 'Choose file', style: 'destructive', onPress: runImportFromFile },
       ],
     );
+  };
+
+  const confirmPasteImport = async () => {
+    if (!pasteText.trim()) {
+      Alert.alert('Nothing to import', 'Paste your backup text first.');
+      return;
+    }
+    const ok = await restoreFromText(pasteText);
+    if (ok) {
+      setShowPasteImport(false);
+      setPasteText('');
+    }
   };
 
   const enableReminder = async () => {
@@ -851,8 +892,15 @@ function Root() {
     });
   };
 
-  const pill =
-    projection.status === 'complete'
+  // No render days left but hours still remain: "0.0h needed" would be misleading.
+  const noDaysLeft =
+    projection.status !== 'complete' &&
+    projection.workingDaysLeft === 0 &&
+    projection.hoursRemaining > 0;
+
+  const pill = noDaysLeft
+    ? { bg: colors.dangerSoft, fg: colors.danger, label: 'No days left' }
+    : projection.status === 'complete'
       ? { bg: colors.successSoft, fg: colors.success, label: 'Complete' }
       : projection.status === 'on-track'
         ? { bg: colors.successSoft, fg: colors.success, label: 'On track' }
@@ -922,7 +970,11 @@ function Root() {
       </Card>
 
       <Card>
-        <CardTitle icon="calendar-outline" title="Dates" />
+        <CardTitle
+          icon="calendar-outline"
+          title="Dates"
+          hint="Check these. The deadline and last render day are pre-filled and may not match your school."
+        />
         <DateField
           label="OJT start date"
           value={appData.settings.startDate}
@@ -980,7 +1032,7 @@ function Root() {
             </View>
           </View>
           <Text style={styles.heroValue}>
-            {projection.hoursPerDayNeeded.toFixed(1)}
+            {noDaysLeft ? '—' : projection.hoursPerDayNeeded.toFixed(1)}
             <Text style={styles.heroUnit}>h</Text>
           </Text>
           <View style={styles.progressTrack}>
@@ -1052,12 +1104,18 @@ function Root() {
               <Text style={styles.helperText}>
                 Projected finish:{' '}
                 <Text style={styles.helperStrong}>
-                  {projection.projectedFinish ? formatDateLabel(projection.projectedFinish) : '—'}
+                  {projection.status === 'complete'
+                    ? 'Done 🎉'
+                    : projection.projectedFinish
+                      ? formatDateLabel(projection.projectedFinish)
+                      : 'After your last render day'}
                 </Text>
               </Text>
-              <Text style={styles.helperText}>
-                Pace: <Text style={styles.helperStrong}>{bufferText}</Text>
-              </Text>
+              {projection.status !== 'complete' && (
+                <Text style={styles.helperText}>
+                  Pace: <Text style={styles.helperStrong}>{bufferText}</Text>
+                </Text>
+              )}
               <Text style={styles.helperText}>
                 Last render day: {formatDateLabel(appData.settings.lastRenderDay)} · Deadline:{' '}
                 {formatDateLabel(appData.settings.deadline)}
@@ -1278,6 +1336,24 @@ function Root() {
       ? appData.settings.customExclusions.includes(calendarDetailDate)
       : false;
 
+    const holidayBox = detailHolidayName ? (
+      <View style={[styles.reasonBox, { backgroundColor: colors.dangerSoft }]}>
+        <Ionicons name="flag-outline" size={16} color={colors.danger} />
+        <Text style={[styles.reasonText, { color: colors.danger }]}>
+          Holiday: {detailHolidayName}
+        </Text>
+      </View>
+    ) : null;
+
+    const excludedBox = detailCustomExcluded ? (
+      <View style={[styles.reasonBox, { backgroundColor: EXCLUDED.bg }]}>
+        <Ionicons name="ban-outline" size={16} color={EXCLUDED.fg} />
+        <Text style={[styles.reasonText, { color: EXCLUDED.fg }]}>
+          Excluded date (you added this)
+        </Text>
+      </View>
+    ) : null;
+
     return (
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Calendar</Text>
@@ -1353,7 +1429,7 @@ function Root() {
                       missed && { color: colors.warn },
                       !renderDay && !hasHours && styles.calDayNumExcluded,
                       isHoliday && !hasHours && { color: colors.danger, fontWeight: '800' },
-                      isCustomExcluded && !hasHours && { color: colors.warn, fontWeight: '800' },
+                      isCustomExcluded && !hasHours && { color: EXCLUDED.fg, fontWeight: '800' },
                     ]}
                   >
                     {Number(key.split('-')[2])}
@@ -1368,25 +1444,25 @@ function Root() {
         </View>
 
         <View style={styles.legendRow}>
-          <View style={styles.legendItem}>
+          <View style={[styles.legendChip, { backgroundColor: colors.primarySoft }]}>
             <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-            <Text style={styles.legendText}>Logged</Text>
+            <Text style={[styles.legendText, { color: colors.primary }]}>Logged</Text>
           </View>
-          <View style={styles.legendItem}>
+          <View style={[styles.legendChip, { backgroundColor: colors.warnSoft }]}>
             <View style={[styles.legendDot, { backgroundColor: colors.warn }]} />
-            <Text style={styles.legendText}>Missed</Text>
+            <Text style={[styles.legendText, { color: colors.warn }]}>Missed</Text>
           </View>
-          <View style={styles.legendItem}>
+          <View style={[styles.legendChip, { backgroundColor: colors.dangerSoft }]}>
             <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
-            <Text style={styles.legendText}>Holiday</Text>
+            <Text style={[styles.legendText, { color: colors.danger }]}>Holiday</Text>
           </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: colors.warn }]} />
-            <Text style={styles.legendText}>Excluded</Text>
+          <View style={[styles.legendChip, { backgroundColor: EXCLUDED.bg }]}>
+            <View style={[styles.legendDot, { backgroundColor: EXCLUDED.fg }]} />
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Excluded</Text>
           </View>
-          <View style={styles.legendItem}>
+          <View style={[styles.legendChip, { backgroundColor: colors.neutralSoft }]}>
             <View style={[styles.legendDot, { backgroundColor: '#CBD5E1' }]} />
-            <Text style={styles.legendText}>Off</Text>
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Off</Text>
           </View>
         </View>
 
@@ -1439,22 +1515,8 @@ function Root() {
                       {detailRender ? 'Render day' : 'Not a render day'}
                     </Text>
 
-                    {detailHolidayName ? (
-                      <View style={[styles.reasonBox, { backgroundColor: colors.dangerSoft }]}>
-                        <Ionicons name="flag-outline" size={16} color={colors.danger} />
-                        <Text style={[styles.reasonText, { color: colors.danger }]}>
-                          Holiday: {detailHolidayName}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {detailCustomExcluded ? (
-                      <View style={[styles.reasonBox, { backgroundColor: colors.warnSoft }]}>
-                        <Ionicons name="ban-outline" size={16} color={colors.warn} />
-                        <Text style={[styles.reasonText, { color: colors.warn }]}>
-                          Excluded date (you added this)
-                        </Text>
-                      </View>
-                    ) : null}
+                    {holidayBox}
+                    {excludedBox}
 
                     {detailEntry.notes ? (
                       <View style={styles.notesBox}>
@@ -1484,22 +1546,8 @@ function Root() {
                     <Text style={styles.helperText}>
                       {detailFuture ? 'This day is in the future.' : 'Nothing logged on this day.'}
                     </Text>
-                    {detailHolidayName ? (
-                      <View style={[styles.reasonBox, { backgroundColor: colors.dangerSoft }]}>
-                        <Ionicons name="flag-outline" size={16} color={colors.danger} />
-                        <Text style={[styles.reasonText, { color: colors.danger }]}>
-                          Holiday: {detailHolidayName}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {detailCustomExcluded ? (
-                      <View style={[styles.reasonBox, { backgroundColor: colors.warnSoft }]}>
-                        <Ionicons name="ban-outline" size={16} color={colors.warn} />
-                        <Text style={[styles.reasonText, { color: colors.warn }]}>
-                          Excluded date (you added this)
-                        </Text>
-                      </View>
-                    ) : null}
+                    {holidayBox}
+                    {excludedBox}
                     {!detailRender && !detailHolidayName && !detailCustomExcluded ? (
                       <View style={[styles.reasonBox, { backgroundColor: '#F1F5F9' }]}>
                         <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
@@ -1623,7 +1671,8 @@ function Root() {
 
           <Text style={[styles.label, { marginTop: space.lg }]}>Built-in holidays</Text>
           <Text style={styles.inputHint}>
-            From the PH holiday list. These are excluded automatically.
+            From the PH holiday list (up to March 2027). These are excluded automatically. Add
+            anything later under Excluded dates.
           </Text>
           <View style={styles.tagContainer}>
             {appData.settings.holidays.length === 0 ? (
@@ -1632,7 +1681,9 @@ function Root() {
               appData.settings.holidays.map((value) => (
                 <View key={value} style={[styles.tag, styles.tagMuted]}>
                   <Text style={[styles.tagText, styles.tagTextMuted]}>
-                    {HOLIDAY_NAMES[value] ? `${formatDateLabel(value)} · ${HOLIDAY_NAMES[value]}` : formatDateLabel(value)}
+                    {HOLIDAY_NAMES[value]
+                      ? `${formatDateLabel(value)} · ${HOLIDAY_NAMES[value]}`
+                      : formatDateLabel(value)}
                   </Text>
                 </View>
               ))
@@ -1659,8 +1710,8 @@ function Root() {
             title="Backup"
             hint={
               appData.lastExportedAt
-                ? `Last exported ${formatDateLabel(String(appData.lastExportedAt).slice(0, 10))}`
-                : 'You have not exported a backup yet.'
+                ? `Last exported ${formatDateLabel(String(appData.lastExportedAt).slice(0, 10))}. Your data only lives on this phone, so export now and then.`
+                : 'You have not exported a backup yet. Your data only lives on this phone.'
             }
           />
           <Btn label="Export backup" icon="share-outline" onPress={handleBackupExport} />
@@ -1706,10 +1757,7 @@ function Root() {
         {screen === 'settings' && renderSettings()}
 
         {toast ? (
-          <View
-            pointerEvents="none"
-            style={[styles.toast, { bottom: kbVisible ? space.lg : space.lg }]}
-          >
+          <View pointerEvents="none" style={[styles.toast, { bottom: space.lg }]}>
             <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
             <Text style={styles.toastText}>{toast}</Text>
           </View>
@@ -1744,12 +1792,61 @@ function Root() {
           })}
         </View>
       )}
+
+      <Modal
+        visible={showPasteImport}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPasteImport(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowPasteImport(false)} />
+            <View style={[styles.sheet, { paddingBottom: space.lg + insets.bottom }]}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.sheetTitle}>Paste your backup</Text>
+              <Text style={styles.inputHint}>
+                Paste the whole backup text you exported. This replaces all data on this device.
+              </Text>
+              <TextInput
+                style={[styles.input, styles.pasteInput]}
+                multiline
+                value={pasteText}
+                onChangeText={setPasteText}
+                placeholder="Paste backup text here"
+                placeholderTextColor={colors.textSecondary}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              <View style={styles.sheetActions}>
+                <Btn
+                  label="Restore"
+                  icon="download-outline"
+                  onPress={confirmPasteImport}
+                  style={{ flex: 1 }}
+                />
+                <Btn
+                  label="Cancel"
+                  variant="secondary"
+                  onPress={() => {
+                    setShowPasteImport(false);
+                    setPasteText('');
+                  }}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 // ---------- styles ----------
-
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
 
@@ -1780,7 +1877,7 @@ const styles = StyleSheet.create({
     marginTop: space.md,
     marginBottom: space.sm,
   },
-  inputHint: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  inputHint: { fontSize: 12, color: colors.textSecondary, marginTop: 4, lineHeight: 17 },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   inputSuffix: { color: colors.textSecondary, fontWeight: '700', fontSize: 15 },
   input: {
@@ -1802,6 +1899,12 @@ const styles = StyleSheet.create({
   },
   inputButtonText: { color: colors.textPrimary, fontWeight: '600', fontSize: 15 },
   textArea: { minHeight: 110, textAlignVertical: 'top' },
+  pasteInput: {
+    minHeight: 160,
+    maxHeight: 260,
+    textAlignVertical: 'top',
+    marginTop: space.sm,
+  },
 
   btn: {
     flexDirection: 'row',
@@ -1975,15 +2078,28 @@ const styles = StyleSheet.create({
   calCircleToday: { borderWidth: 2, borderColor: colors.primary },
   calCircleOff: { backgroundColor: '#F1F5F9' },
   calCircleHoliday: { backgroundColor: colors.dangerSoft },
-  calCircleExcluded: { backgroundColor: colors.warnSoft },
+  calCircleExcluded: { backgroundColor: EXCLUDED.bg },
   calDayNum: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   calDayNumLogged: { color: '#FFFFFF' },
   calDayNumExcluded: { color: colors.textSecondary, fontWeight: '500' },
   calHours: { fontSize: 9, fontWeight: '700', color: '#FFFFFF', marginTop: 1 },
-  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: space.md },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 10, height: 10, borderRadius: 3 },
-  legendText: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
+
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: space.md,
+  },
+  legendChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 12, fontWeight: '700' },
 
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(10,37,64,0.35)' },
   pickerSheet: {

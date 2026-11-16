@@ -1,4 +1,5 @@
 import { AppData, Settings } from './types';
+import { formatDateForInput } from './utils';
 
 export const STORAGE_KEY = 'ojt_tracker_data_v1';
 
@@ -99,7 +100,8 @@ export function holidaysForOjtWindow(year: number): string[] {
 export function buildDefaultSettings(): Settings {
     const now = new Date();
     const year = now.getFullYear();
-    const todayIso = now.toISOString().split('T')[0];
+    // Local date (toISOString() is UTC and gives yesterday before 8 AM in the PH).
+    const todayIso = formatDateForInput(now);
 
     return {
         requiredHours: 486,
