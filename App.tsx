@@ -1,3 +1,4 @@
+// App.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -24,6 +25,8 @@ import {
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
+import * as NavigationBar from 'expo-navigation-bar';
+
 import { Ionicons } from '@expo/vector-icons';
 
 import { buildEmptyData, HOLIDAY_NAMES } from './src/defaults';
@@ -55,8 +58,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// ---------- constants ----------
-
 type ScreenName = 'onboarding' | 'dashboard' | 'daily-log' | 'calendar' | 'settings';
 type TimeFieldKey = 'amTimeIn' | 'amTimeOut' | 'pmTimeIn' | 'pmTimeOut';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -70,37 +71,24 @@ const MONTH_LABELS = [
 ];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const EXCLUDED = {
-  bg: colors.neutralSoft,
-  fg: colors.neutral,
-};
+const EXCLUDED = { bg: colors.neutralSoft, fg: colors.textSecondary };
 
 const TIME_SUGGESTIONS: Record<TimeFieldKey, { h: number; m: number }> = {
-  amTimeIn: { h: 8, m: 0 },
-  amTimeOut: { h: 12, m: 0 },
-  pmTimeIn: { h: 13, m: 0 },
-  pmTimeOut: { h: 17, m: 0 },
+  amTimeIn: { h: 8, m: 0 }, amTimeOut: { h: 12, m: 0 },
+  pmTimeIn: { h: 13, m: 0 }, pmTimeOut: { h: 17, m: 0 },
 };
 
-const ENTRY_FIELDS: (keyof DayEntry)[] = [
-  'amTimeIn',
-  'amTimeOut',
-  'pmTimeIn',
-  'pmTimeOut',
-  'notes',
-];
+const ENTRY_FIELDS: (keyof DayEntry)[] = ['amTimeIn', 'amTimeOut', 'pmTimeIn', 'pmTimeOut', 'notes'];
 
 const REMINDER_ID = 'ojt-daily-reminder';
 const REMINDER_CHANNEL = 'reminders';
 
 const TABS: { key: Exclude<ScreenName, 'onboarding'>; label: string; icon: IconName; iconActive: IconName }[] = [
-  { key: 'dashboard', label: 'Home', icon: 'speedometer-outline', iconActive: 'speedometer' },
+  { key: 'dashboard', label: 'Home', icon: 'home-outline', iconActive: 'home' },
   { key: 'daily-log', label: 'Log', icon: 'create-outline', iconActive: 'create' },
   { key: 'calendar', label: 'Calendar', icon: 'calendar-outline', iconActive: 'calendar' },
   { key: 'settings', label: 'Settings', icon: 'settings-outline', iconActive: 'settings' },
 ];
-
-// ---------- helpers ----------
 
 function isoAt(dateKey: string, hour: number, minute: number): string {
   const base = parseDateOnly(dateKey);
@@ -109,14 +97,7 @@ function isoAt(dateKey: string, hour: number, minute: number): string {
 
 function makeLocalIsoFromTime(dateKey: string, time: Date): string {
   const base = parseDateOnly(dateKey);
-  return new Date(
-    base.getFullYear(),
-    base.getMonth(),
-    base.getDate(),
-    time.getHours(),
-    time.getMinutes(),
-    0,
-  ).toISOString();
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), time.getHours(), time.getMinutes(), 0).toISOString();
 }
 
 function formatClock12(iso: string | null): string {
@@ -155,9 +136,7 @@ function getMonthMatrix(year: number, month: number): (string | null)[] {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells: (string | null)[] = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push(formatDateForInput(new Date(year, month, d)));
-  }
+  for (let d = 1; d <= daysInMonth; d++) cells.push(formatDateForInput(new Date(year, month, d)));
   while (cells.length % 7 !== 0) cells.push(null);
   return cells;
 }
@@ -168,38 +147,23 @@ function extractJson(text: string): string {
   return start >= 0 && end > start ? text.slice(start, end + 1) : text;
 }
 
-// ---------- small UI pieces ----------
-
 type BtnProps = {
-  label: string;
-  onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
-  icon?: IconName;
-  disabled?: boolean;
-  style?: StyleProp<ViewStyle>;
+  label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'danger';
+  icon?: IconName; disabled?: boolean; style?: StyleProp<ViewStyle>;
 };
 
 function Btn({ label, onPress, variant = 'primary', icon, disabled, style }: BtnProps) {
-  const fg =
-    variant === 'primary' ? '#FFFFFF' : variant === 'danger' ? colors.danger : colors.textPrimary;
+  const fg = variant === 'primary' ? '#FFFFFF' : variant === 'danger' ? colors.danger : colors.textPrimary;
   return (
     <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
-      disabled={disabled}
-      onPress={onPress}
+      accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled} onPress={onPress}
       style={({ pressed }) => [
-        styles.btn,
-        variant === 'primary' && styles.btnPrimary,
-        variant === 'secondary' && styles.btnSecondary,
-        variant === 'danger' && styles.btnDanger,
-        pressed && { opacity: 0.85 },
-        disabled && { opacity: 0.45 },
-        style,
+        styles.btn, variant === 'primary' && styles.btnPrimary, variant === 'secondary' && styles.btnSecondary,
+        variant === 'danger' && styles.btnDanger, pressed && { opacity: 0.8 }, disabled && { opacity: 0.4 }, style,
       ]}
     >
-      {icon ? <Ionicons name={icon} size={18} color={fg} style={{ marginRight: 8 }} /> : null}
+      {icon ? <Ionicons name={icon} size={17} color={fg} style={{ marginRight: 7 }} /> : null}
       <Text style={[styles.btnText, { color: fg }]}>{label}</Text>
     </Pressable>
   );
@@ -209,13 +173,10 @@ function Card({ children, style }: { children: React.ReactNode; style?: StylePro
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-function CardTitle({ icon, title, hint }: { icon?: IconName; title: string; hint?: string }) {
+function CardTitle({ title, hint }: { icon?: IconName; title: string; hint?: string }) {
   return (
     <View style={{ marginBottom: space.sm }}>
-      <View style={styles.cardTitleRow}>
-        {icon ? <Ionicons name={icon} size={18} color={colors.primary} /> : null}
-        <Text style={styles.cardTitle}>{title}</Text>
-      </View>
+      <Text style={styles.cardTitle}>{title}</Text>
       {hint ? <Text style={styles.inputHint}>{hint}</Text> : null}
     </View>
   );
@@ -230,47 +191,23 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-type NumberFieldProps = {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  suffix?: string;
-  hint?: string;
-  onCommit: (value: number) => void;
-};
+type NumberFieldProps = { label: string; value: number; min: number; max: number; suffix?: string; hint?: string; onCommit: (value: number) => void; };
 
 function NumberField({ label, value, min, max, suffix, hint, onCommit }: NumberFieldProps) {
   const [text, setText] = useState(String(value));
-
-  useEffect(() => {
-    setText(String(value));
-  }, [value]);
-
+  useEffect(() => { setText(String(value)); }, [value]);
   const commit = () => {
     const n = Number(text.replace(/[^0-9.]/g, ''));
-    if (!text.trim() || !Number.isFinite(n) || n < min) {
-      setText(String(value));
-      return;
-    }
+    if (!text.trim() || !Number.isFinite(n) || n < min) { setText(String(value)); return; }
     const clamped = Math.min(max, n);
     setText(String(clamped));
     onCommit(clamped);
   };
-
   return (
     <View style={{ marginTop: space.md }}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.inputRow}>
-        <TextInput
-          style={[styles.input, { flex: 1 }]}
-          keyboardType="decimal-pad"
-          value={text}
-          onChangeText={setText}
-          onBlur={commit}
-          onEndEditing={commit}
-          selectTextOnFocus
-        />
+        <TextInput style={[styles.input, { flex: 1 }]} keyboardType="decimal-pad" value={text} onChangeText={setText} onBlur={commit} onEndEditing={commit} selectTextOnFocus />
         {suffix ? <Text style={styles.inputSuffix}>{suffix}</Text> : null}
       </View>
       {hint ? <Text style={styles.inputHint}>{hint}</Text> : null}
@@ -278,26 +215,13 @@ function NumberField({ label, value, min, max, suffix, hint, onCommit }: NumberF
   );
 }
 
-type NativePickerProps = {
-  mode: 'date' | 'time';
-  value: Date;
-  maximumDate?: Date;
-  minimumDate?: Date;
-  onConfirm: (value: Date) => void;
-  onCancel: () => void;
-};
+type NativePickerProps = { mode: 'date' | 'time'; value: Date; maximumDate?: Date; minimumDate?: Date; onConfirm: (value: Date) => void; onCancel: () => void; };
 
 function NativePicker({ mode, value, maximumDate, minimumDate, onConfirm, onCancel }: NativePickerProps) {
   const [draft, setDraft] = useState(value);
-
   if (Platform.OS === 'android') {
     return (
-      <DateTimePicker
-        value={value}
-        mode={mode}
-        display={mode === 'date' ? 'calendar' : 'spinner'}
-        maximumDate={maximumDate}
-        minimumDate={minimumDate}
+      <DateTimePicker value={value} mode={mode} display={mode === 'date' ? 'calendar' : 'spinner'} maximumDate={maximumDate} minimumDate={minimumDate}
         onChange={(event: DateTimePickerEvent, picked?: Date) => {
           if (event.type === 'set' && picked) onConfirm(picked);
           else onCancel();
@@ -305,131 +229,68 @@ function NativePicker({ mode, value, maximumDate, minimumDate, onConfirm, onCanc
       />
     );
   }
-
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onCancel}>
       <View style={styles.modalOverlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
         <View style={styles.pickerSheet}>
           <View style={styles.pickerHeader}>
-            <Pressable onPress={onCancel} hitSlop={10}>
-              <Text style={styles.pickerCancel}>Cancel</Text>
-            </Pressable>
-            <Pressable onPress={() => onConfirm(draft)} hitSlop={10}>
-              <Text style={styles.pickerDone}>Done</Text>
-            </Pressable>
+            <Pressable onPress={onCancel} hitSlop={10}><Text style={styles.pickerCancel}>Cancel</Text></Pressable>
+            <Pressable onPress={() => onConfirm(draft)} hitSlop={10}><Text style={styles.pickerDone}>Done</Text></Pressable>
           </View>
-          <DateTimePicker
-            value={draft}
-            mode={mode}
-            display={mode === 'date' ? 'inline' : 'spinner'}
-            maximumDate={maximumDate}
-            minimumDate={minimumDate}
-            onChange={(_event: DateTimePickerEvent, picked?: Date) => {
-              if (picked) setDraft(picked);
-            }}
-          />
+          <DateTimePicker value={draft} mode={mode} display={mode === 'date' ? 'inline' : 'spinner'} maximumDate={maximumDate} minimumDate={minimumDate}
+            onChange={(_event: DateTimePickerEvent, picked?: Date) => { if (picked) setDraft(picked); }} />
         </View>
       </View>
     </Modal>
   );
 }
 
-type TimeFieldProps = {
-  label: string;
-  fieldKey: TimeFieldKey;
-  value: string | null;
-  selectedDate: string;
-  onChange: (value: string | null) => void;
-};
+type TimeFieldProps = { label: string; fieldKey: TimeFieldKey; value: string | null; selectedDate: string; onChange: (value: string | null) => void; };
 
 function TimeField({ label, fieldKey, value, selectedDate, onChange }: TimeFieldProps) {
   const [showPicker, setShowPicker] = useState(false);
   const suggestion = suggestionDate(selectedDate, fieldKey);
   const current = value ? new Date(value) : suggestion;
   const isSuggested = !value;
-
   return (
     <View style={styles.timeFieldWrap}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${label} time`}
-        style={[styles.timeButton, isSuggested && styles.timeButtonSuggested]}
-        onPress={() => setShowPicker(true)}
-      >
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label} time`} style={styles.timeButton} onPress={() => setShowPicker(true)}>
         <Text style={[styles.timeButtonText, isSuggested && styles.timeButtonTextSuggested]}>
           {isSuggested ? 'Set time' : formatClock12(value)}
         </Text>
         {value ? (
-          <Pressable
-            hitSlop={10}
-            accessibilityLabel={`Clear ${label}`}
-            onPress={() => onChange(null)}
-            style={styles.timeClear}
-          >
-            <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+          <Pressable hitSlop={10} accessibilityLabel={`Clear ${label}`} onPress={() => onChange(null)} style={styles.timeClear}>
+            <Ionicons name="close" size={16} color={colors.textSecondary} />
           </Pressable>
         ) : null}
       </Pressable>
       {showPicker && (
-        <NativePicker
-          mode="time"
-          value={current}
-          onCancel={() => setShowPicker(false)}
-          onConfirm={(picked) => {
-            setShowPicker(false);
-            onChange(makeLocalIsoFromTime(selectedDate, picked));
-          }}
-        />
+        <NativePicker mode="time" value={current} onCancel={() => setShowPicker(false)}
+          onConfirm={(picked) => { setShowPicker(false); onChange(makeLocalIsoFromTime(selectedDate, picked)); }} />
       )}
     </View>
   );
 }
 
-type DateFieldProps = {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  maximumDate?: Date;
-  minimumDate?: Date;
-};
+type DateFieldProps = { label: string; value: string; onChange: (value: string) => void; maximumDate?: Date; minimumDate?: Date; };
 
 function DateField({ label, value, onChange, maximumDate, minimumDate }: DateFieldProps) {
   const [showPicker, setShowPicker] = useState(false);
   const current = value ? parseDateOnly(value) : new Date();
-
   return (
     <View style={{ marginTop: space.md }}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        style={styles.inputButton}
-        onPress={() => setShowPicker(true)}
-      >
-        <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
-        <Text
-          style={[
-            styles.inputButtonText,
-            !value && { color: colors.textSecondary, fontWeight: '500' },
-          ]}
-        >
-          {value ? formatLongDate(value) : 'Tap to pick a date'}
+      <Pressable accessibilityRole="button" accessibilityLabel={label} style={styles.inputButton} onPress={() => setShowPicker(true)}>
+        <Text style={[styles.inputButtonText, !value && { color: colors.textSecondary, fontWeight: '400' }]}>
+          {value ? formatLongDate(value) : 'Select date'}
         </Text>
+        <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
       </Pressable>
       {showPicker && (
-        <NativePicker
-          mode="date"
-          value={current}
-          maximumDate={maximumDate}
-          minimumDate={minimumDate}
-          onCancel={() => setShowPicker(false)}
-          onConfirm={(picked) => {
-            setShowPicker(false);
-            onChange(formatDateForInput(picked));
-          }}
-        />
+        <NativePicker mode="date" value={current} maximumDate={maximumDate} minimumDate={minimumDate}
+          onCancel={() => setShowPicker(false)} onConfirm={(picked) => { setShowPicker(false); onChange(formatDateForInput(picked)); }} />
       )}
     </View>
   );
@@ -441,34 +302,28 @@ function AddExclusionButton({ onPick }: { onPick: (dateKey: string) => void }) {
     <>
       <Btn label="Add excluded date" icon="add" variant="secondary" onPress={() => setShowPicker(true)} />
       {showPicker && (
-        <NativePicker
-          mode="date"
-          value={new Date()}
-          onCancel={() => setShowPicker(false)}
-          onConfirm={(picked) => {
-            setShowPicker(false);
-            onPick(formatDateForInput(picked));
-          }}
-        />
+        <NativePicker mode="date" value={new Date()} onCancel={() => setShowPicker(false)}
+          onConfirm={(picked) => { setShowPicker(false); onPick(formatDateForInput(picked)); }} />
       )}
     </>
   );
 }
 
-// ---------- app ----------
-
 export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar hidden={true} />
       <Root />
     </SafeAreaProvider>
   );
 }
-
 function Root() {
   const insets = useSafeAreaInsets();
-
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('hidden');
+    }
+  }, []);
   const [appData, setAppData] = useState<AppData>(buildEmptyData());
   const [isLoading, setIsLoading] = useState(true);
   const [screen, setScreen] = useState<ScreenName>('onboarding');
@@ -485,8 +340,12 @@ function Root() {
   const [toast, setToast] = useState<string | null>(null);
   const [showPasteImport, setShowPasteImport] = useState(false);
   const [pasteText, setPasteText] = useState('');
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [showExclusionModal, setShowExclusionModal] = useState(false);
+  const [pendingExclusionDate, setPendingExclusionDate] = useState('');
+  const [exclusionNameInput, setExclusionNameInput] = useState('');
+
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const todayKey = formatDateForInput(new Date());
 
   const showToast = (message: string) => {
@@ -496,18 +355,13 @@ function Root() {
   };
 
   useEffect(() => {
-    return () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    };
+    return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
   }, []);
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKbVisible(true));
     const hide = Keyboard.addListener('keyboardDidHide', () => setKbVisible(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
+    return () => { show.remove(); hide.remove(); };
   }, []);
 
   useEffect(() => {
@@ -519,17 +373,13 @@ function Root() {
       } catch {
         setAppData(buildEmptyData());
         setScreen('onboarding');
-      } finally {
-        setIsLoading(false);
-      }
+      } finally { setIsLoading(false); }
     };
     hydrate();
   }, []);
 
   useEffect(() => {
-    if (!isLoading) {
-      saveAppData(appData).catch(() => undefined);
-    }
+    if (!isLoading) saveAppData(appData).catch(() => undefined);
   }, [appData, isLoading]);
 
   useEffect(() => {
@@ -541,26 +391,15 @@ function Root() {
     try {
       const all = await Notifications.getAllScheduledNotificationsAsync();
       setReminderOn(all.some((n) => n.identifier === REMINDER_ID));
-    } catch {
-      setReminderOn(false);
-    }
+    } catch { setReminderOn(false); }
   };
 
-  useEffect(() => {
-    if (screen === 'settings') refreshReminderStatus();
-  }, [screen]);
+  useEffect(() => { if (screen === 'settings') refreshReminderStatus(); }, [screen]);
 
-  const projection = useMemo(
-    () => computeProjection(appData.settings, appData.entries, new Date()),
-    [appData.entries, appData.settings],
-  );
-
+  const projection = useMemo(() => computeProjection(appData.settings, appData.entries, new Date()), [appData.entries, appData.settings]);
   const currentEntry = appData.entries[selectedDate] || buildEntry(selectedDate);
   const workingEntry = focusEntry || currentEntry;
-
-  const dirty = ENTRY_FIELDS.some(
-    (k) => (workingEntry[k] ?? '') !== (currentEntry[k] ?? ''),
-  );
+  const dirty = ENTRY_FIELDS.some((k) => (workingEntry[k] ?? '') !== (currentEntry[k] ?? ''));
 
   const updateSettings = (changes: Partial<Settings>) => {
     setAppData((prev) => ({ ...prev, settings: { ...prev.settings, ...changes } }));
@@ -568,42 +407,24 @@ function Root() {
 
   const patchEntry = (patch: Partial<DayEntry>) => {
     setFocusEntry((prev) => ({
-      ...(prev || buildEntry(selectedDate)),
-      date: selectedDate,
-      ...patch,
-      updatedAt: new Date().toISOString(),
-      edited: true,
+      ...(prev || buildEntry(selectedDate)), date: selectedDate, ...patch,
+      updatedAt: new Date().toISOString(), edited: true,
     }));
   };
 
   const guardedSetDate = (key: string, after?: () => void) => {
-    if (key === selectedDate) {
-      after?.();
-      return;
-    }
-    if (isFutureDate(key, new Date())) {
-      Alert.alert('Future date', 'You can only log today or earlier.');
-      return;
-    }
+    if (key === selectedDate) { after?.(); return; }
+    if (isFutureDate(key, new Date())) { Alert.alert('Future date', 'You can only log today or earlier.'); return; }
     if (isBeforeStart(key, appData.settings)) {
-      Alert.alert(
-        'Before your OJT start',
-        `Your OJT starts on ${formatDateLabel(appData.settings.startDate)}. You can't log earlier than that.`,
-      );
+      Alert.alert('Before your OJT start', `Your OJT starts on ${formatDateLabel(appData.settings.startDate)}. You can't log earlier than that.`);
       return;
     }
-    const go = () => {
-      setSelectedDate(key);
-      after?.();
-    };
+    const go = () => { setSelectedDate(key); after?.(); };
     if (dirty) {
       Alert.alert('Discard changes?', 'You have unsaved changes for this day.', [
-        { text: 'Keep editing', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: go },
+        { text: 'Keep editing', style: 'cancel' }, { text: 'Discard', style: 'destructive', onPress: go },
       ]);
-    } else {
-      go();
-    }
+    } else { go(); }
   };
 
   const shiftDay = (delta: number) => {
@@ -615,14 +436,7 @@ function Root() {
   const persistEntry = (entry: DayEntry, now: string) => {
     setAppData((prev) => ({
       ...prev,
-      entries: {
-        ...prev.entries,
-        [entry.date]: {
-          ...entry,
-          edited: entry.edited || !!prev.entries[entry.date],
-          updatedAt: now,
-        },
-      },
+      entries: { ...prev.entries, [entry.date]: { ...entry, edited: entry.edited || !!prev.entries[entry.date], updatedAt: now } },
     }));
     showToast(`Saved ${formatDateLabel(entry.date)}`);
     setScreen('dashboard');
@@ -630,104 +444,44 @@ function Root() {
 
   const saveEntry = (entry: DayEntry) => {
     const now = new Date().toISOString();
-
-    if (isFutureDate(entry.date, new Date())) {
-      Alert.alert('Invalid date', 'Future dates are not allowed.');
-      return;
-    }
-    if (isBeforeStart(entry.date, appData.settings)) {
-      Alert.alert(
-        'Before your OJT start',
-        `Your OJT starts on ${formatDateLabel(appData.settings.startDate)}. You can't log earlier than that.`,
-      );
-      return;
-    }
-
+    if (isFutureDate(entry.date, new Date())) { Alert.alert('Invalid date', 'Future dates are not allowed.'); return; }
+    if (isBeforeStart(entry.date, appData.settings)) { Alert.alert('Before your OJT start', `Your OJT starts on ${formatDateLabel(appData.settings.startDate)}.`); return; }
     const amIn = entry.amTimeIn ? new Date(entry.amTimeIn) : null;
     const amOut = entry.amTimeOut ? new Date(entry.amTimeOut) : null;
     const pmIn = entry.pmTimeIn ? new Date(entry.pmTimeIn) : null;
     const pmOut = entry.pmTimeOut ? new Date(entry.pmTimeOut) : null;
-
-    if (!amIn && !amOut && !pmIn && !pmOut && !entry.notes?.trim()) {
-      Alert.alert('Nothing to save', 'Set at least one time or add a note.');
-      return;
-    }
-    if (amIn && amOut && amOut.getTime() <= amIn.getTime()) {
-      Alert.alert('Check morning times', 'AM out must be later than AM in.');
-      return;
-    }
-    if (pmIn && pmOut && pmOut.getTime() <= pmIn.getTime()) {
-      Alert.alert('Check afternoon times', 'PM out must be later than PM in.');
-      return;
-    }
+    if (!amIn && !amOut && !pmIn && !pmOut && !entry.notes?.trim()) { Alert.alert('Nothing to save', 'Set at least one time or add a note.'); return; }
+    if (amIn && amOut && amOut.getTime() <= amIn.getTime()) { Alert.alert('Check morning times', 'AM out must be later than AM in.'); return; }
+    if (pmIn && pmOut && pmOut.getTime() <= pmIn.getTime()) { Alert.alert('Check afternoon times', 'PM out must be later than PM in.'); return; }
     const morningEnd = amOut || amIn;
-    if (morningEnd && pmIn && pmIn.getTime() < morningEnd.getTime()) {
-      Alert.alert('Check your times', 'PM in must be later than the morning times.');
-      return;
-    }
-
+    if (morningEnd && pmIn && pmIn.getTime() < morningEnd.getTime()) { Alert.alert('Check your times', 'PM in must be later than the morning times.'); return; }
     const dayHours = getDayHoursFromEntry(entry);
     const warnings: string[] = [];
-    if ((amIn && !amOut) || (!amIn && amOut)) {
-      warnings.push('Morning has only one time, so it will not count toward your hours.');
-    }
-    if ((pmIn && !pmOut) || (!pmIn && pmOut)) {
-      warnings.push('Afternoon has only one time, so it will not count toward your hours.');
-    }
-    if (dayHours > appData.settings.maxHoursPerDay) {
-      warnings.push(
-        `This day totals ${dayHours.toFixed(1)}h, above your ${appData.settings.maxHoursPerDay}h soft cap.`,
-      );
-    }
-    if (dayHours > 0 && !isRenderDay(entry.date, appData.settings)) {
-      warnings.push('This is not a render day (weekend, holiday, or excluded).');
-    }
-
+    if ((amIn && !amOut) || (!amIn && amOut)) warnings.push('Morning has only one time, so it will not count toward your hours.');
+    if ((pmIn && !pmOut) || (!pmIn && pmOut)) warnings.push('Afternoon has only one time, so it will not count toward your hours.');
+    if (dayHours > appData.settings.maxHoursPerDay) warnings.push(`This day totals ${dayHours.toFixed(1)}h, above your ${appData.settings.maxHoursPerDay}h soft cap.`);
+    if (dayHours > 0 && !isRenderDay(entry.date, appData.settings)) warnings.push('This is not a render day (weekend, holiday, or excluded).');
     if (warnings.length) {
-      Alert.alert('Double-check this day', warnings.join('\n\n'), [
-        { text: 'Edit', style: 'cancel' },
-        { text: 'Save anyway', onPress: () => persistEntry(entry, now) },
-      ]);
+      Alert.alert('Double-check this day', warnings.join('\n\n'), [{ text: 'Edit', style: 'cancel' }, { text: 'Save anyway', onPress: () => persistEntry(entry, now) }]);
       return;
     }
     persistEntry(entry, now);
   };
 
-  const handleSaveCurrentEntry = () => {
-    saveEntry(focusEntry || { ...currentEntry, updatedAt: new Date().toISOString() });
-  };
+  const handleSaveCurrentEntry = () => { saveEntry(focusEntry || { ...currentEntry, updatedAt: new Date().toISOString() }); };
 
   const fillDefaultDay = () => {
-    patchEntry({
-      amTimeIn: isoAt(selectedDate, 8, 0),
-      amTimeOut: isoAt(selectedDate, 12, 0),
-      pmTimeIn: isoAt(selectedDate, 13, 0),
-      pmTimeOut: isoAt(selectedDate, 17, 0),
-    });
+    patchEntry({ amTimeIn: isoAt(selectedDate, 8, 0), amTimeOut: isoAt(selectedDate, 12, 0), pmTimeIn: isoAt(selectedDate, 13, 0), pmTimeOut: isoAt(selectedDate, 17, 0) });
   };
 
-  const clearTimes = () => {
-    patchEntry({ amTimeIn: null, amTimeOut: null, pmTimeIn: null, pmTimeOut: null });
-  };
+  const clearTimes = () => { patchEntry({ amTimeIn: null, amTimeOut: null, pmTimeIn: null, pmTimeOut: null }); };
 
   const handleCompletedOnboarding = () => {
     const s = appData.settings;
-    if (!s.requiredHours || s.requiredHours <= 0) {
-      Alert.alert('Required hours', 'Enter how many hours you need to render.');
-      return;
-    }
-    if (!s.startDate || !s.deadline || !s.lastRenderDay) {
-      Alert.alert('Missing dates', 'Pick your start date, deadline, and last render day.');
-      return;
-    }
-    if (s.deadline < s.startDate || s.lastRenderDay < s.startDate) {
-      Alert.alert('Check your dates', 'Deadline and last render day must be after your start date.');
-      return;
-    }
-    if (!s.allowedWorkdays.some(Boolean)) {
-      Alert.alert('Workdays', 'Turn on at least one workday.');
-      return;
-    }
+    if (!s.requiredHours || s.requiredHours <= 0) { Alert.alert('Required hours', 'Enter how many hours you need to render.'); return; }
+    if (!s.startDate || !s.deadline || !s.lastRenderDay) { Alert.alert('Missing dates', 'Pick your start date, deadline, and last render day.'); return; }
+    if (s.deadline < s.startDate || s.lastRenderDay < s.startDate) { Alert.alert('Check your dates', 'Deadline and last render day must be after your start date.'); return; }
+    if (!s.allowedWorkdays.some(Boolean)) { Alert.alert('Workdays', 'Turn on at least one workday.'); return; }
     setAppData((prev) => ({ ...prev, hasCompletedOnboarding: true }));
     setScreen('dashboard');
   };
@@ -735,17 +489,12 @@ function Root() {
   const handleBackupExport = async () => {
     try {
       const text = await exportJsonBackup(appData);
-      const result = await Share.share({
-        title: 'OJT Tracker backup',
-        message: `Backup file for OJT Tracker\n\n${text}`,
-      });
+      const result = await Share.share({ title: 'OJT Tracker backup', message: `Backup file for OJT Tracker\n\n${text}` });
       if (result.action === Share.sharedAction) {
         setAppData((prev) => ({ ...prev, lastExportedAt: new Date().toISOString() }));
         showToast('Backup exported');
       }
-    } catch {
-      Alert.alert('Export failed', 'Could not export the backup.');
-    }
+    } catch { Alert.alert('Export failed', 'Could not export the backup.'); }
   };
 
   const restoreFromText = async (text: string): Promise<boolean> => {
@@ -755,10 +504,7 @@ function Root() {
       showToast('Backup restored');
       return true;
     } catch {
-      Alert.alert(
-        'Import failed',
-        'That backup could not be restored. Make sure you copied the whole backup text.',
-      );
+      Alert.alert('Import failed', 'That backup could not be restored. Make sure you copied the whole backup text.');
       return false;
     }
   };
@@ -770,86 +516,48 @@ function Root() {
       const response = await fetch(result.assets[0].uri);
       const text = await response.text();
       await restoreFromText(text);
-    } catch {
-      Alert.alert('Import failed', 'The selected file could not be read.');
-    }
+    } catch { Alert.alert('Import failed', 'The selected file could not be read.'); }
   };
 
   const handleBackupImport = () => {
-    Alert.alert(
-      'Replace current data?',
-      'Importing a backup replaces everything on this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Paste text', style: 'destructive', onPress: () => setShowPasteImport(true) },
-        { text: 'Choose file', style: 'destructive', onPress: runImportFromFile },
-      ],
-    );
+    Alert.alert('Replace current data?', 'Importing a backup replaces everything on this device.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Paste text', style: 'destructive', onPress: () => setShowPasteImport(true) },
+      { text: 'Choose file', style: 'destructive', onPress: runImportFromFile },
+    ]);
   };
 
   const confirmPasteImport = async () => {
-    if (!pasteText.trim()) {
-      Alert.alert('Nothing to import', 'Paste your backup text first.');
-      return;
-    }
+    if (!pasteText.trim()) { Alert.alert('Nothing to import', 'Paste your backup text first.'); return; }
     const ok = await restoreFromText(pasteText);
-    if (ok) {
-      setShowPasteImport(false);
-      setPasteText('');
-    }
+    if (ok) { setShowPasteImport(false); setPasteText(''); }
   };
 
   const enableReminder = async () => {
     try {
       if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL, {
-          name: 'Daily reminder',
-          importance: Notifications.AndroidImportance.DEFAULT,
-        });
+        await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL, { name: 'Daily reminder', importance: Notifications.AndroidImportance.DEFAULT });
       }
       const { status } = await Notifications.getPermissionsAsync();
       if (status !== 'granted') {
         const permission = await Notifications.requestPermissionsAsync();
-        if (permission.status !== 'granted') {
-          Alert.alert('Permission needed', 'Turn on notifications for this app in your phone settings.');
-          return;
-        }
+        if (permission.status !== 'granted') { Alert.alert('Permission needed', 'Turn on notifications for this app in your phone settings.'); return; }
       }
       await Notifications.cancelScheduledNotificationAsync(REMINDER_ID).catch(() => undefined);
       await Notifications.scheduleNotificationAsync({
         identifier: REMINDER_ID,
-        content: {
-          title: 'Still working?',
-          body: 'Log your OJT hours before you finish the day.',
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: 18,
-          minute: 0,
-          channelId: REMINDER_CHANNEL,
-        },
+        content: { title: 'Still working?', body: 'Log your OJT hours before you finish the day.' },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: 18, minute: 0, channelId: REMINDER_CHANNEL },
       });
       setReminderOn(true);
       showToast('Daily reminder set for 6:00 PM');
-    } catch {
-      Alert.alert('Reminder failed', 'Could not schedule the reminder on this device.');
-    }
+    } catch { Alert.alert('Reminder failed', 'Could not schedule the reminder on this device.'); }
   };
 
   const disableReminder = async () => {
-    try {
-      await Notifications.cancelScheduledNotificationAsync(REMINDER_ID);
-    } catch {
-      // ignore
-    }
+    try { await Notifications.cancelScheduledNotificationAsync(REMINDER_ID); } catch { /* ignore */ }
     setReminderOn(false);
     showToast('Reminder turned off');
-  };
-
-  const removeCustomExclusion = (value: string) => {
-    updateSettings({
-      customExclusions: appData.settings.customExclusions.filter((item) => item !== value),
-    });
   };
 
   const deleteEntry = (dateKey: string) => {
@@ -861,87 +569,54 @@ function Root() {
   };
 
   const confirmDeleteEntry = (dateKey: string) => {
-    Alert.alert(
-      'Delete this log?',
-      `Remove all hours logged on ${formatDateLabel(dateKey)}? This can't be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteEntry(dateKey);
-            setCalendarDetailDate(null);
-            showToast('Log deleted');
-          },
-        },
-      ],
-    );
+    Alert.alert('Delete this log?', `Remove all hours logged on ${formatDateLabel(dateKey)}? This can't be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => { deleteEntry(dateKey); setCalendarDetailDate(null); showToast('Log deleted'); } },
+    ]);
   };
 
   const confirmResetAll = () => {
-    Alert.alert(
-      'Reset all data?',
-      'This deletes every log and setting on this device. Export a backup first if you need one.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset everything',
-          style: 'destructive',
-          onPress: async () => {
-            await disableReminder();
-            setAppData((prev) => ({ ...buildEmptyData(), lastExportedAt: prev.lastExportedAt }));
-            setScreen('onboarding');
-          },
-        },
-      ],
-    );
+    Alert.alert('Reset all data?', 'This deletes every log and setting on this device. Export a backup first if you need one.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reset everything', style: 'destructive', onPress: async () => {
+          await disableReminder();
+          setAppData((prev) => ({ ...buildEmptyData(), lastExportedAt: prev.lastExportedAt }));
+          setScreen('onboarding');
+        }
+      },
+    ]);
   };
 
   const editFromCalendar = (dateKey: string) => {
-    guardedSetDate(dateKey, () => {
-      setCalendarDetailDate(null);
-      setScreen('daily-log');
-    });
+    guardedSetDate(dateKey, () => { setCalendarDetailDate(null); setScreen('daily-log'); });
   };
 
-  const noDaysLeft =
-    projection.status !== 'complete' &&
-    projection.workingDaysLeft === 0 &&
-    projection.hoursRemaining > 0;
+  const noDaysLeft = projection.status !== 'complete' && projection.workingDaysLeft === 0 && projection.hoursRemaining > 0;
 
   const pill = noDaysLeft
     ? { bg: colors.dangerSoft, fg: colors.danger, label: 'No days left' }
-    : projection.status === 'complete'
-      ? { bg: colors.successSoft, fg: colors.success, label: 'Complete' }
-      : projection.status === 'on-track'
-        ? { bg: colors.successSoft, fg: colors.success, label: 'On track' }
-        : projection.status === 'behind'
-          ? { bg: colors.dangerSoft, fg: colors.danger, label: 'Behind' }
+    : projection.status === 'complete' ? { bg: colors.successSoft, fg: colors.success, label: 'Complete' }
+      : projection.status === 'on-track' ? { bg: colors.successSoft, fg: colors.success, label: 'On track' }
+        : projection.status === 'behind' ? { bg: colors.dangerSoft, fg: colors.danger, label: 'Behind' }
           : { bg: colors.warnSoft, fg: colors.warn, label: 'Needs data' };
 
   const progressPct = appData.settings.requiredHours
     ? Math.min(100, (projection.totalHoursRendered / appData.settings.requiredHours) * 100)
     : 0;
 
-  // ---------- screens ----------
-
   const renderWorkdayChips = () => (
     <View style={styles.chipRow}>
       {DAY_LABELS.map((day, index) => {
         const on = appData.settings.allowedWorkdays[index];
         return (
-          <Pressable
-            key={day}
-            accessibilityRole="button"
-            accessibilityLabel={`${day} ${on ? 'on' : 'off'}`}
+          <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${day} ${on ? 'on' : 'off'}`}
             style={[styles.chip, on && styles.chipOn]}
             onPress={() => {
               const next = [...appData.settings.allowedWorkdays];
               next[index] = !next[index];
               updateSettings({ allowedWorkdays: next });
-            }}
-          >
+            }}>
             <Text style={[styles.chipText, on && styles.chipTextOn]}>{day}</Text>
           </Pressable>
         );
@@ -950,64 +625,32 @@ function Root() {
   );
 
   const renderOnboarding = () => (
-    <ScrollView
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-    >
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>Set up your OJT plan</Text>
-      <Text style={styles.subtitle}>
-        Your data stays on this phone. Nothing is uploaded.
-      </Text>
-
+      <Text style={styles.subtitle}>Your data stays on this phone. Nothing is uploaded.</Text>
       <Card>
-        <CardTitle icon="time-outline" title="Hours" />
-        <NumberField
-          label="Required hours"
-          value={appData.settings.requiredHours || 486}
-          min={1}
-          max={5000}
-          suffix="h"
-          onCommit={(v) => updateSettings({ requiredHours: v })}
-        />
+        <CardTitle title="Hours" />
+        <NumberField label="Required hours" value={appData.settings.requiredHours || 486} min={1} max={5000} suffix="h" onCommit={(v) => updateSettings({ requiredHours: v })} />
         <NumberField
           label="Soft cap per day"
           value={appData.settings.maxHoursPerDay || 12}
           min={1}
           max={24}
           suffix="h"
-          hint="We ask you to double-check any day above this."
+          hint="A warning limit, not a hard lock. If you log more than this in one day, the app will ask you to double-check your hours (to catch typos), but you can still save it."
           onCommit={(v) => updateSettings({ maxHoursPerDay: v })}
         />
       </Card>
-
       <Card>
-        <CardTitle
-          icon="calendar-outline"
-          title="Dates"
-          hint="The deadline and last render day are the same. Pick your end date here."
-        />
-        <DateField
-          label="OJT start date"
-          value={appData.settings.startDate}
-          onChange={(v) => updateSettings({ startDate: v })}
-        />
-
-        {/* Merged Deadline & Last Render Day */}
-        <DateField
-          label="Deadline & Last render day"
-          value={appData.settings.deadline}
-          minimumDate={appData.settings.startDate ? parseDateOnly(appData.settings.startDate) : undefined}
-          onChange={(v) => updateSettings({ deadline: v, lastRenderDay: v })}
-        />
+        <CardTitle title="Dates" hint="The deadline and last render day are the same. Pick your end date here." />
+        <DateField label="OJT start date" value={appData.settings.startDate} onChange={(v) => updateSettings({ startDate: v })} />
+        <DateField label="Deadline & last render day" value={appData.settings.deadline} minimumDate={appData.settings.startDate ? parseDateOnly(appData.settings.startDate) : undefined} onChange={(v) => updateSettings({ deadline: v, lastRenderDay: v })} />
       </Card>
-
       <Card>
-        <CardTitle icon="briefcase-outline" title="Workdays" hint="Tap the days you report for OJT." />
+        <CardTitle title="Workdays" hint="Tap the days you report for OJT." />
         {renderWorkdayChips()}
       </Card>
-
-      <Btn label="Continue to dashboard" icon="arrow-forward" onPress={handleCompletedOnboarding} />
+      <Btn label="Continue" onPress={handleCompletedOnboarding} />
     </ScrollView>
   );
 
@@ -1015,119 +658,84 @@ function Root() {
     const todayEntry = appData.entries[todayKey];
     const todayHours = todayEntry ? getDayHoursFromEntry(todayEntry) : 0;
     const deadline = appData.settings.deadline;
-    const daysToDeadline = deadline
-      ? Math.ceil(
-        (parseDateOnly(deadline).getTime() - parseDateOnly(todayKey).getTime()) / 86400000,
-      )
-      : null;
+    const daysToDeadline = deadline ? Math.ceil((parseDateOnly(deadline).getTime() - parseDateOnly(todayKey).getTime()) / 86400000) : null;
     const buffer = Number(projection.bufferOrDeficit);
-    const bufferText = Number.isFinite(buffer)
-      ? buffer >= 0
-        ? `${buffer} workday${buffer === 1 ? '' : 's'} to spare`
-        : `${Math.abs(buffer)} workday${Math.abs(buffer) === 1 ? '' : 's'} short`
-      : '—';
+    const bufferText = Number.isFinite(buffer) ? buffer >= 0 ? `${buffer} workday${buffer === 1 ? '' : 's'} to spare` : `${Math.abs(buffer)} workday${Math.abs(buffer) === 1 ? '' : 's'} short` : '—';
 
     return (
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Text style={styles.subtitleTop}>{formatLongDate(todayKey)}</Text>
         <Text style={styles.title}>OJT Tracker</Text>
-        <Text style={styles.subtitle}>{formatLongDate(todayKey)}</Text>
 
         <View style={styles.heroCard}>
           <View style={styles.heroHeader}>
             <Text style={styles.heroEyebrow}>Hours needed per day</Text>
-            <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
-              <Text style={[styles.statusPillText, { color: pill.fg }]}>{pill.label}</Text>
+            <View style={styles.statusRow}>
+              <View style={[styles.statusDot, { backgroundColor: pill.fg }]} />
+              <Text style={[styles.statusText, { color: pill.fg }]}>{pill.label}</Text>
             </View>
           </View>
           <Text style={styles.heroValue}>
-            {noDaysLeft ? '—' : projection.hoursPerDayNeeded.toFixed(1)}
-            <Text style={styles.heroUnit}>h</Text>
+            {noDaysLeft ? '—' : <Text>{projection.hoursPerDayNeeded.toFixed(1)}<Text style={styles.heroUnit}> h</Text></Text>}
           </Text>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
+          <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progressPct}%` }]} /></View>
+          <View style={styles.heroFooterRow}>
+            <Text style={styles.heroFooter}>{projection.totalHoursRendered.toFixed(1)} of {appData.settings.requiredHours} h</Text>
+            <Text style={styles.heroFooter}>{progressPct.toFixed(0)}%</Text>
           </View>
-          <Text style={styles.heroFooter}>
-            {projection.totalHoursRendered.toFixed(1)}h of {appData.settings.requiredHours}h rendered
-            {'  ·  '}
-            {progressPct.toFixed(0)}%
-          </Text>
         </View>
 
         <Card>
           <View style={styles.todayRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Today</Text>
-              <Text style={styles.helperText}>
-                {todayHours > 0
-                  ? `${todayHours.toFixed(1)}h logged`
-                  : isRenderDay(todayKey, appData.settings)
-                    ? 'Nothing logged yet'
-                    : 'Not a render day'}
-              </Text>
+              <Text style={styles.helperText}>{todayHours > 0 ? `${todayHours.toFixed(1)}h logged` : isRenderDay(todayKey, appData.settings) ? 'Nothing logged yet' : 'Not a render day'}</Text>
             </View>
-            <Btn
-              label={todayHours > 0 ? 'Edit today' : 'Log today'}
-              icon={todayHours > 0 ? 'create-outline' : 'add'}
-              onPress={() => guardedSetDate(todayKey, () => setScreen('daily-log'))}
-              style={{ paddingHorizontal: space.lg }}
-            />
+            <Btn label={todayHours > 0 ? 'Edit' : 'Log hours'} onPress={() => guardedSetDate(todayKey, () => setScreen('daily-log'))} style={{ paddingHorizontal: space.lg }} />
           </View>
         </Card>
 
         <Card>
-          <CardTitle icon="stats-chart-outline" title="Overview" />
+          <CardTitle title="Overview" />
           <View style={styles.metaGrid}>
             <Stat label="Working days left" value={String(projection.workingDaysLeft)} />
             <Stat label="Hours remaining" value={`${projection.hoursRemaining.toFixed(1)}h`} />
-            <Stat
-              label="Average per day"
-              value={projection.avgPerWorkday ? `${projection.avgPerWorkday.toFixed(1)}h` : '—'}
-            />
+            <Stat label="Average per day" value={projection.avgPerWorkday ? `${projection.avgPerWorkday.toFixed(1)}h` : '—'} />
             <Stat label="Days logged" value={String(projection.workdaysRendered)} />
-            <Stat
-              label="Days to deadline"
-              value={
-                daysToDeadline === null
-                  ? '—'
-                  : daysToDeadline < 0
-                    ? 'Past due'
-                    : String(daysToDeadline)
-              }
-            />
+            <Stat label="Days to deadline" value={daysToDeadline === null ? '—' : daysToDeadline < 0 ? 'Past due' : String(daysToDeadline)} />
           </View>
         </Card>
 
         <Card>
-          <CardTitle icon="trending-up-outline" title="Projection" />
+          <CardTitle title="Projection" />
           {projection.status === 'not-enough-data' ? (
             <View>
               <Text style={styles.warnText}>Log your first day to see your projection</Text>
               <Text style={styles.helperText}>
-                We'll estimate your finish date and whether you'll hit{' '}
-                {formatDateLabel(appData.settings.lastRenderDay)}.
+                We only need one completed day to calculate your initial pace, so you don't have to wait three days to see your progress.
+                Just note that this early projection is based on a single shift—it will become much more accurate as you log more days.
               </Text>
             </View>
           ) : (
             <>
-              <Text style={styles.helperText}>
-                Projected finish:{' '}
-                <Text style={styles.helperStrong}>
-                  {projection.status === 'complete'
-                    ? 'Done 🎉'
-                    : projection.projectedFinish
-                      ? formatDateLabel(projection.projectedFinish)
-                      : 'After your last render day'}
-                </Text>
-              </Text>
+              <View style={styles.kvRow}>
+                <Text style={styles.kvLabel}>Projected finish</Text>
+                <Text style={styles.kvValue}>{projection.status === 'complete' ? 'Done' : projection.projectedFinish ? formatDateLabel(projection.projectedFinish) : 'After last render day'}</Text>
+              </View>
               {projection.status !== 'complete' && (
-                <Text style={styles.helperText}>
-                  Pace: <Text style={styles.helperStrong}>{bufferText}</Text>
-                </Text>
+                <View style={styles.kvRow}>
+                  <Text style={styles.kvLabel}>Pace</Text>
+                  <Text style={styles.kvValue}>{bufferText}</Text>
+                </View>
               )}
-              <Text style={styles.helperText}>
-                Last render day: {formatDateLabel(appData.settings.lastRenderDay)} · Deadline:{' '}
-                {formatDateLabel(appData.settings.deadline)}
-              </Text>
+              <View style={styles.kvRow}>
+                <Text style={styles.kvLabel}>Last render day</Text>
+                <Text style={styles.kvValue}>{formatDateLabel(appData.settings.lastRenderDay)}</Text>
+              </View>
+              <View style={[styles.kvRow, { borderBottomWidth: 0 }]}>
+                <Text style={styles.kvLabel}>Deadline</Text>
+                <Text style={styles.kvValue}>{formatDateLabel(appData.settings.deadline)}</Text>
+              </View>
             </>
           )}
         </Card>
@@ -1141,163 +749,58 @@ function Root() {
     const isToday = selectedDate >= todayKey;
 
     return (
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>Daily log</Text>
-
           <View style={styles.dateNav}>
-            <Pressable
-              accessibilityLabel="Previous day"
-              style={styles.calNavBtn}
-              onPress={() => shiftDay(-1)}
-            >
-              <Ionicons name="chevron-back" size={20} color={colors.primary} />
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Pick a date"
-              style={styles.dateNavCenter}
-              onPress={() => setShowDatePicker(true)}
-            >
+            <Pressable accessibilityLabel="Previous day" style={styles.calNavBtn} onPress={() => shiftDay(-1)}><Ionicons name="chevron-back" size={18} color={colors.textPrimary} /></Pressable>
+            <Pressable accessibilityLabel="Pick a date" style={styles.dateNavCenter} onPress={() => setShowDatePicker(true)}>
               <Text style={styles.dateNavText}>{formatLongDate(selectedDate)}</Text>
-              <Text style={styles.dateNavSub}>
-                {selectedDate === todayKey ? 'Today · tap to change' : 'Tap to change'}
-              </Text>
+              <Text style={styles.dateNavSub}>{selectedDate === todayKey ? 'Today' : 'Tap to change'}</Text>
             </Pressable>
-            <Pressable
-              accessibilityLabel="Next day"
-              style={[styles.calNavBtn, isToday && { opacity: 0.35 }]}
-              disabled={isToday}
-              onPress={() => shiftDay(1)}
-            >
-              <Ionicons name="chevron-forward" size={20} color={colors.primary} />
-            </Pressable>
+            <Pressable accessibilityLabel="Next day" style={[styles.calNavBtn, isToday && { opacity: 0.35 }]} disabled={isToday} onPress={() => shiftDay(1)}><Ionicons name="chevron-forward" size={18} color={colors.textPrimary} /></Pressable>
           </View>
-
-          {selectedDate !== todayKey && (
-            <Pressable style={styles.jumpToday} onPress={() => guardedSetDate(todayKey)}>
-              <Text style={styles.jumpTodayText}>Jump to today</Text>
-            </Pressable>
-          )}
-
-          {showDatePicker && (
-            <NativePicker
-              mode="date"
-              value={parseDateOnly(selectedDate)}
-              maximumDate={new Date()}
-              minimumDate={appData.settings.startDate ? parseDateOnly(appData.settings.startDate) : undefined}
-              onCancel={() => setShowDatePicker(false)}
-              onConfirm={(picked) => {
-                setShowDatePicker(false);
-                guardedSetDate(formatDateForInput(picked));
-              }}
-            />
-          )}
+          {selectedDate !== todayKey && <Pressable style={styles.jumpToday} onPress={() => guardedSetDate(todayKey)}><Text style={styles.jumpTodayText}>Jump to today</Text></Pressable>}
+          {showDatePicker && <NativePicker mode="date" value={parseDateOnly(selectedDate)} maximumDate={new Date()} minimumDate={appData.settings.startDate ? parseDateOnly(appData.settings.startDate) : undefined} onCancel={() => setShowDatePicker(false)} onConfirm={(picked) => { setShowDatePicker(false); guardedSetDate(formatDateForInput(picked)); }} />}
 
           <Card>
-            <CardTitle icon="sunny-outline" title="Morning" />
+            <Text style={styles.groupLabel}>Morning</Text>
             <View style={styles.timeRow}>
-              <TimeField
-                label="In"
-                fieldKey="amTimeIn"
-                value={workingEntry.amTimeIn}
-                selectedDate={selectedDate}
-                onChange={(v) => patchEntry({ amTimeIn: v })}
-              />
-              <TimeField
-                label="Out"
-                fieldKey="amTimeOut"
-                value={workingEntry.amTimeOut}
-                selectedDate={selectedDate}
-                onChange={(v) => patchEntry({ amTimeOut: v })}
-              />
+              <TimeField label="In" fieldKey="amTimeIn" value={workingEntry.amTimeIn} selectedDate={selectedDate} onChange={(v) => patchEntry({ amTimeIn: v })} />
+              <TimeField label="Out" fieldKey="amTimeOut" value={workingEntry.amTimeOut} selectedDate={selectedDate} onChange={(v) => patchEntry({ amTimeOut: v })} />
             </View>
-          </Card>
-
-          <Card>
-            <CardTitle icon="partly-sunny-outline" title="Afternoon" />
+            <View style={styles.divider} />
+            <Text style={styles.groupLabel}>Afternoon</Text>
             <View style={styles.timeRow}>
-              <TimeField
-                label="In"
-                fieldKey="pmTimeIn"
-                value={workingEntry.pmTimeIn}
-                selectedDate={selectedDate}
-                onChange={(v) => patchEntry({ pmTimeIn: v })}
-              />
-              <TimeField
-                label="Out"
-                fieldKey="pmTimeOut"
-                value={workingEntry.pmTimeOut}
-                selectedDate={selectedDate}
-                onChange={(v) => patchEntry({ pmTimeOut: v })}
-              />
+              <TimeField label="In" fieldKey="pmTimeIn" value={workingEntry.pmTimeIn} selectedDate={selectedDate} onChange={(v) => patchEntry({ pmTimeIn: v })} />
+              <TimeField label="Out" fieldKey="pmTimeOut" value={workingEntry.pmTimeOut} selectedDate={selectedDate} onChange={(v) => patchEntry({ pmTimeOut: v })} />
             </View>
           </Card>
 
           <View style={styles.quickRow}>
-            <Btn
-              label="Fill 8–12, 1–5"
-              icon="flash-outline"
-              variant="secondary"
-              onPress={fillDefaultDay}
-              style={{ flex: 1 }}
-            />
-            <Btn
-              label="Clear times"
-              icon="trash-outline"
-              variant="secondary"
-              onPress={clearTimes}
-              style={{ flex: 1 }}
-            />
+            <Btn label="Fill 8–12, 1–5" variant="secondary" onPress={fillDefaultDay} style={{ flex: 1 }} />
+            <Btn label="Clear times" variant="secondary" onPress={clearTimes} style={{ flex: 1 }} />
           </View>
 
           <Card>
             <View style={styles.totalRow}>
               <View>
                 <Text style={styles.metaLabel}>Total today</Text>
-                <Text style={styles.totalValue}>{hours.toFixed(1)}h</Text>
-              </View>
-              <View
-                style={[
-                  styles.statusPill,
-                  { backgroundColor: renderDay ? colors.successSoft : colors.warnSoft },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusPillText,
-                    { color: renderDay ? colors.success : colors.warn },
-                  ]}
-                >
-                  {renderDay ? 'Render day' : 'Not a render day'}
+                <Text style={styles.totalValue}>
+                  {`${hours.toFixed(1)} h`}
                 </Text>
+              </View>
+              <View style={styles.statusRow}>
+                <View style={[styles.statusDot, { backgroundColor: renderDay ? colors.success : colors.warn }]} />
+                <Text style={[styles.statusText, { color: renderDay ? colors.success : colors.warn }]}>{renderDay ? 'Render day' : 'Not a render day'}</Text>
               </View>
             </View>
           </Card>
 
           <Text style={styles.label}>Notes</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            multiline
-            value={workingEntry.notes}
-            onChangeText={(text) => patchEntry({ notes: text })}
-            placeholder="What did you work on? (optional)"
-            placeholderTextColor={colors.textSecondary}
-          />
-
+          <TextInput style={[styles.input, styles.textArea]} multiline value={workingEntry.notes} onChangeText={(text) => patchEntry({ notes: text })} placeholder="What did you work on? (optional)" placeholderTextColor={colors.neutral} />
           <View style={{ height: space.lg }} />
-          <Btn
-            label={dirty || !appData.entries[selectedDate] ? 'Save day' : 'Saved'}
-            icon="checkmark"
-            disabled={!dirty && !!appData.entries[selectedDate]}
-            onPress={handleSaveCurrentEntry}
-          />
+          <Btn label={dirty || !appData.entries[selectedDate] ? 'Save day' : 'Saved'} disabled={!dirty && !!appData.entries[selectedDate]} onPress={handleSaveCurrentEntry} />
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -1306,7 +809,6 @@ function Root() {
   const renderCalendar = () => {
     const { year, month } = calendarMonth;
     const matrix = getMonthMatrix(year, month);
-
     let monthDaysLogged = 0;
     let monthHours = 0;
     for (const key of matrix) {
@@ -1314,97 +816,36 @@ function Root() {
       const entry = appData.entries[key];
       if (entry) {
         const h = getDayHoursFromEntry(entry);
-        if (h > 0) {
-          monthDaysLogged += 1;
-          monthHours += h;
-        }
+        if (h > 0) { monthDaysLogged += 1; monthHours += h; }
       }
     }
-
-    const goPrev = () =>
-      month === 0
-        ? setCalendarMonth({ year: year - 1, month: 11 })
-        : setCalendarMonth({ year, month: month - 1 });
-    const goNext = () =>
-      month === 11
-        ? setCalendarMonth({ year: year + 1, month: 0 })
-        : setCalendarMonth({ year, month: month + 1 });
-    const goToday = () => {
-      const now = new Date();
-      setCalendarMonth({ year: now.getFullYear(), month: now.getMonth() });
-    };
+    const goPrev = () => month === 0 ? setCalendarMonth({ year: year - 1, month: 11 }) : setCalendarMonth({ year, month: month - 1 });
+    const goNext = () => month === 11 ? setCalendarMonth({ year: year + 1, month: 0 }) : setCalendarMonth({ year, month: month + 1 });
+    const goToday = () => { const now = new Date(); setCalendarMonth({ year: now.getFullYear(), month: now.getMonth() }); };
 
     const detailEntry = calendarDetailDate ? appData.entries[calendarDetailDate] : undefined;
     const detailHours = detailEntry ? getDayHoursFromEntry(detailEntry) : 0;
     const detailFuture = calendarDetailDate ? isFutureDate(calendarDetailDate, new Date()) : false;
-    const detailBeforeStart = calendarDetailDate
-      ? isBeforeStart(calendarDetailDate, appData.settings)
-      : false;
-    const detailRender = calendarDetailDate
-      ? isRenderDay(calendarDetailDate, appData.settings)
-      : false;
+    const detailBeforeStart = calendarDetailDate ? isBeforeStart(calendarDetailDate, appData.settings) : false;
+    const detailRender = calendarDetailDate ? isRenderDay(calendarDetailDate, appData.settings) : false;
     const detailHolidayName = calendarDetailDate ? HOLIDAY_NAMES[calendarDetailDate] : undefined;
-    const detailCustomExcluded = calendarDetailDate
-      ? appData.settings.customExclusions.includes(calendarDetailDate)
-      : false;
+    const detailCustomExcluded = calendarDetailDate ? appData.settings.customExclusions.includes(calendarDetailDate) : false;
+    const detailCustomName = calendarDetailDate ? appData.settings.customExclusionNames?.[calendarDetailDate] : undefined;
 
-    const holidayBox = detailHolidayName ? (
-      <View style={[styles.reasonBox, { backgroundColor: colors.dangerSoft }]}>
-        <Ionicons name="flag-outline" size={16} color={colors.danger} />
-        <Text style={[styles.reasonText, { color: colors.danger }]}>
-          Holiday: {detailHolidayName}
-        </Text>
-      </View>
-    ) : null;
-
-    const excludedBox = detailCustomExcluded ? (
-      <View style={[styles.reasonBox, { backgroundColor: EXCLUDED.bg }]}>
-        <Ionicons name="ban-outline" size={16} color={EXCLUDED.fg} />
-        <Text style={[styles.reasonText, { color: EXCLUDED.fg }]}>
-          Excluded date (you added this)
-        </Text>
-      </View>
-    ) : null;
-
-    const beforeStartBox = detailBeforeStart ? (
-      <View style={[styles.reasonBox, { backgroundColor: colors.neutralSoft }]}>
-        <Ionicons name="calendar-outline" size={16} color={colors.neutral} />
-        <Text style={[styles.reasonText, { color: colors.textSecondary }]}>
-          Before your OJT start ({formatDateLabel(appData.settings.startDate)})
-        </Text>
-      </View>
-    ) : null;
+    const holidayBox = detailHolidayName ? (<View style={[styles.reasonBox, { backgroundColor: colors.dangerSoft }]}><Text style={[styles.reasonText, { color: colors.danger }]}>Holiday: {detailHolidayName}</Text></View>) : null;
+    const excludedBox = detailCustomExcluded ? (<View style={[styles.reasonBox, { backgroundColor: EXCLUDED.bg }]}><Text style={[styles.reasonText, { color: EXCLUDED.fg }]}>Excluded{detailCustomName ? `: ${detailCustomName}` : ''}</Text></View>) : null;
+    const beforeStartBox = detailBeforeStart ? (<View style={[styles.reasonBox, { backgroundColor: colors.neutralSoft }]}><Text style={[styles.reasonText, { color: colors.textSecondary }]}>Before your OJT start ({formatDateLabel(appData.settings.startDate)})</Text></View>) : null;
 
     return (
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Calendar</Text>
-        <Text style={styles.subtitle}>
-          {monthDaysLogged} day{monthDaysLogged === 1 ? '' : 's'} logged · {monthHours.toFixed(1)}h
-          this month
-        </Text>
-
+        <Text style={styles.subtitle}>{monthDaysLogged} day{monthDaysLogged === 1 ? '' : 's'} logged · {monthHours.toFixed(1)}h this month</Text>
         <View style={styles.calHeader}>
-          <Pressable accessibilityLabel="Previous month" style={styles.calNavBtn} onPress={goPrev}>
-            <Ionicons name="chevron-back" size={20} color={colors.primary} />
-          </Pressable>
-          <Pressable onPress={goToday} accessibilityLabel="Jump to this month">
-            <Text style={styles.calMonthLabel}>
-              {MONTH_LABELS[month]} {year}
-            </Text>
-          </Pressable>
-          <Pressable accessibilityLabel="Next month" style={styles.calNavBtn} onPress={goNext}>
-            <Ionicons name="chevron-forward" size={20} color={colors.primary} />
-          </Pressable>
+          <Pressable accessibilityLabel="Previous month" style={styles.calNavBtn} onPress={goPrev}><Ionicons name="chevron-back" size={18} color={colors.textPrimary} /></Pressable>
+          <Pressable onPress={goToday} accessibilityLabel="Jump to this month"><Text style={styles.calMonthLabel}>{MONTH_LABELS[month]} {year}</Text></Pressable>
+          <Pressable accessibilityLabel="Next month" style={styles.calNavBtn} onPress={goNext}><Ionicons name="chevron-forward" size={18} color={colors.textPrimary} /></Pressable>
         </View>
-
-        <View style={styles.calWeekRow}>
-          {CALENDAR_HEADER.map((d, i) => (
-            <Text key={`${d}-${i}`} style={styles.calWeekLabel}>
-              {d}
-            </Text>
-          ))}
-        </View>
-
+        <View style={styles.calWeekRow}>{CALENDAR_HEADER.map((d, i) => <Text key={`${d}-${i}`} style={styles.calWeekLabel}>{d}</Text>)}</View>
         <View style={styles.calGrid}>
           {matrix.map((key, idx) => {
             if (!key) return <View key={`pad-${idx}`} style={styles.calCell} />;
@@ -1415,88 +856,29 @@ function Root() {
             const isToday = key === todayKey;
             const isFuture = isFutureDate(key, new Date());
             const beforeStart = isBeforeStart(key, appData.settings);
-            const missed =
-              !hasHours &&
-              renderDay &&
-              !isFuture &&
-              !isToday &&
-              !beforeStart &&
-              !!appData.settings.startDate &&
-              key >= appData.settings.startDate;
+            const missed = !hasHours && renderDay && !isFuture && !isToday && !beforeStart && !!appData.settings.startDate && key >= appData.settings.startDate;
             const isHoliday = appData.settings.holidays.includes(key);
             const isCustomExcluded = appData.settings.customExclusions.includes(key);
-
             return (
-              <Pressable
-                key={key}
-                accessibilityLabel={`${formatLongDate(key)}${hasHours ? `, ${h.toFixed(1)} hours` : ''}${isHoliday ? ', holiday' : isCustomExcluded ? ', excluded' : ''
-                  }`}
-                style={styles.calCell}
-                onPress={() => setCalendarDetailDate(key)}
-              >
-                <View
-                  style={[
-                    styles.calCircle,
-                    hasHours && styles.calCircleLogged,
-                    missed && styles.calCircleMissed,
-                    isToday && styles.calCircleToday,
-                    !renderDay && !hasHours && styles.calCircleOff,
-                    isHoliday && !hasHours && styles.calCircleHoliday,
-                    isCustomExcluded && !hasHours && styles.calCircleExcluded,
-                    beforeStart && !hasHours && { opacity: 0.35 },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.calDayNum,
-                      hasHours && styles.calDayNumLogged,
-                      missed && { color: colors.warn },
-                      !renderDay && !hasHours && styles.calDayNumExcluded,
-                      isHoliday && !hasHours && { color: colors.danger, fontWeight: '800' },
-                      isCustomExcluded && !hasHours && { color: EXCLUDED.fg, fontWeight: '800' },
-                      beforeStart && !hasHours && { color: colors.textSecondary },
-                    ]}
-                  >
+              <Pressable key={key} accessibilityLabel={`${formatLongDate(key)}${hasHours ? `, ${h.toFixed(1)} hours` : ''}${isHoliday ? ', holiday' : isCustomExcluded ? ', excluded' : ''}`} style={styles.calCell} onPress={() => setCalendarDetailDate(key)}>
+                <View style={[styles.calCircle, hasHours && styles.calCircleLogged, missed && styles.calCircleMissed, !renderDay && !hasHours && styles.calCircleOff, isHoliday && !hasHours && styles.calCircleHoliday, isCustomExcluded && !hasHours && styles.calCircleExcluded, beforeStart && !hasHours && { opacity: 0.4 }, isToday && styles.calCircleToday]}>
+                  <Text style={[styles.calDayNum, hasHours && styles.calDayNumLogged, missed && { color: colors.warn }, !renderDay && !hasHours && styles.calDayNumExcluded, isHoliday && !hasHours && { color: colors.danger, fontWeight: '600' }, isCustomExcluded && !hasHours && { color: EXCLUDED.fg, fontWeight: '600' }]}>
                     {Number(key.split('-')[2])}
                   </Text>
-                  {hasHours ? (
-                    <Text style={styles.calHours}>{h.toFixed(h % 1 === 0 ? 0 : 1)}h</Text>
-                  ) : null}
+                  {hasHours ? <Text style={styles.calHours}>{h.toFixed(h % 1 === 0 ? 0 : 1)}h</Text> : null}
                 </View>
               </Pressable>
             );
           })}
         </View>
-
         <View style={styles.legendRow}>
-          <View style={[styles.legendChip, { backgroundColor: colors.primarySoft }]}>
-            <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-            <Text style={[styles.legendText, { color: colors.primary }]}>Logged</Text>
-          </View>
-          <View style={[styles.legendChip, { backgroundColor: colors.warnSoft }]}>
-            <View style={[styles.legendDot, { backgroundColor: colors.warn }]} />
-            <Text style={[styles.legendText, { color: colors.warn }]}>Missed</Text>
-          </View>
-          <View style={[styles.legendChip, { backgroundColor: colors.dangerSoft }]}>
-            <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
-            <Text style={[styles.legendText, { color: colors.danger }]}>Holiday</Text>
-          </View>
-          <View style={[styles.legendChip, { backgroundColor: EXCLUDED.bg }]}>
-            <View style={[styles.legendDot, { backgroundColor: EXCLUDED.fg }]} />
-            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Excluded</Text>
-          </View>
-          <View style={[styles.legendChip, { backgroundColor: colors.neutralSoft }]}>
-            <View style={[styles.legendDot, { backgroundColor: '#CBD5E1' }]} />
-            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Off</Text>
-          </View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: colors.primary }]} /><Text style={styles.legendText}>Logged</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: colors.warn }]} /><Text style={styles.legendText}>Missed</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: colors.danger }]} /><Text style={styles.legendText}>Holiday</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: colors.borderStrong }]} /><Text style={styles.legendText}>Excluded</Text></View>
         </View>
 
-        <Modal
-          visible={!!calendarDetailDate}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setCalendarDetailDate(null)}
-        >
+        <Modal visible={!!calendarDetailDate} transparent animationType="slide" onRequestClose={() => setCalendarDetailDate(null)}>
           <View style={styles.modalOverlay}>
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setCalendarDetailDate(null)} />
             {calendarDetailDate && (
@@ -1504,99 +886,36 @@ function Root() {
                 <View style={styles.sheetHandle} />
                 <View style={styles.sheetHeaderRow}>
                   <Text style={styles.sheetTitle}>{formatLongDate(calendarDetailDate)}</Text>
-                  <Pressable
-                    accessibilityLabel="Close"
-                    hitSlop={10}
-                    onPress={() => setCalendarDetailDate(null)}
-                  >
-                    <Ionicons name="close" size={22} color={colors.textSecondary} />
-                  </Pressable>
+                  <Pressable accessibilityLabel="Close" hitSlop={10} onPress={() => setCalendarDetailDate(null)}><Ionicons name="close" size={22} color={colors.textSecondary} /></Pressable>
                 </View>
-
                 {detailEntry && detailHours > 0 ? (
                   <>
                     <View style={styles.sheetGrid}>
-                      <View style={styles.sheetItem}>
-                        <Text style={styles.sheetLabel}>AM in</Text>
-                        <Text style={styles.sheetValue}>{formatClock12(detailEntry.amTimeIn)}</Text>
-                      </View>
-                      <View style={styles.sheetItem}>
-                        <Text style={styles.sheetLabel}>AM out</Text>
-                        <Text style={styles.sheetValue}>{formatClock12(detailEntry.amTimeOut)}</Text>
-                      </View>
-                      <View style={styles.sheetItem}>
-                        <Text style={styles.sheetLabel}>PM in</Text>
-                        <Text style={styles.sheetValue}>{formatClock12(detailEntry.pmTimeIn)}</Text>
-                      </View>
-                      <View style={styles.sheetItem}>
-                        <Text style={styles.sheetLabel}>PM out</Text>
-                        <Text style={styles.sheetValue}>{formatClock12(detailEntry.pmTimeOut)}</Text>
-                      </View>
+                      <View style={styles.sheetItem}><Text style={styles.sheetLabel}>AM in</Text><Text style={styles.sheetValue}>{formatClock12(detailEntry.amTimeIn)}</Text></View>
+                      <View style={styles.sheetItem}><Text style={styles.sheetLabel}>AM out</Text><Text style={styles.sheetValue}>{formatClock12(detailEntry.amTimeOut)}</Text></View>
+                      <View style={styles.sheetItem}><Text style={styles.sheetLabel}>PM in</Text><Text style={styles.sheetValue}>{formatClock12(detailEntry.pmTimeIn)}</Text></View>
+                      <View style={styles.sheetItem}><Text style={styles.sheetLabel}>PM out</Text><Text style={styles.sheetValue}>{formatClock12(detailEntry.pmTimeOut)}</Text></View>
                     </View>
-
-                    <Text style={styles.sheetMeta}>
-                      Total: <Text style={styles.helperStrong}>{detailHours.toFixed(1)}h</Text>
-                      {'  ·  '}
-                      {detailRender ? 'Render day' : 'Not a render day'}
-                    </Text>
-
+                    <Text style={styles.sheetMeta}>Total <Text style={styles.helperStrong}>{detailHours.toFixed(1)}h</Text>  ·  {detailRender ? 'Render day' : 'Not a render day'}</Text>
                     {holidayBox}
                     {excludedBox}
                     {beforeStartBox}
-
-                    {detailEntry.notes ? (
-                      <View style={styles.notesBox}>
-                        <Text style={styles.sheetLabel}>Notes</Text>
-                        <Text style={styles.notesText}>{detailEntry.notes}</Text>
-                      </View>
-                    ) : null}
-
+                    {detailEntry.notes ? <View style={styles.notesBox}><Text style={styles.sheetLabel}>Notes</Text><Text style={styles.notesText}>{detailEntry.notes}</Text></View> : null}
                     <View style={styles.sheetActions}>
-                      <Btn
-                        label="Edit"
-                        icon="create-outline"
-                        onPress={() => editFromCalendar(calendarDetailDate)}
-                        style={{ flex: 1 }}
-                      />
-                      <Btn
-                        label="Delete"
-                        icon="trash-outline"
-                        variant="danger"
-                        onPress={() => confirmDeleteEntry(calendarDetailDate)}
-                        style={{ flex: 1 }}
-                      />
+                      <Btn label="Edit" onPress={() => editFromCalendar(calendarDetailDate)} style={{ flex: 1 }} />
+                      <Btn label="Delete" variant="danger" onPress={() => confirmDeleteEntry(calendarDetailDate)} style={{ flex: 1 }} />
                     </View>
                   </>
                 ) : (
                   <>
-                    <Text style={styles.helperText}>
-                      {detailFuture ? 'This day is in the future.' : 'Nothing logged on this day.'}
-                    </Text>
+                    <Text style={styles.helperText}>{detailFuture ? 'This day is in the future.' : 'Nothing logged on this day.'}</Text>
                     {holidayBox}
                     {excludedBox}
                     {beforeStartBox}
-                    {!detailRender && !detailHolidayName && !detailCustomExcluded && !detailBeforeStart ? (
-                      <View style={[styles.reasonBox, { backgroundColor: '#F1F5F9' }]}>
-                        <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
-                        <Text style={[styles.reasonText, { color: colors.textSecondary }]}>
-                          Not a workday (weekend or outside your OJT window)
-                        </Text>
-                      </View>
-                    ) : null}
+                    {!detailRender && !detailHolidayName && !detailCustomExcluded && !detailBeforeStart ? (<View style={[styles.reasonBox, { backgroundColor: colors.neutralSoft }]}><Text style={[styles.reasonText, { color: colors.textSecondary }]}>Not a workday (weekend or outside your OJT window)</Text></View>) : null}
                     <View style={styles.sheetActions}>
-                      <Btn
-                        label="Log this day"
-                        icon="add"
-                        disabled={detailFuture || detailBeforeStart}
-                        onPress={() => editFromCalendar(calendarDetailDate)}
-                        style={{ flex: 1 }}
-                      />
-                      <Btn
-                        label="Close"
-                        variant="secondary"
-                        onPress={() => setCalendarDetailDate(null)}
-                        style={{ flex: 1 }}
-                      />
+                      <Btn label="Log this day" disabled={detailFuture || detailBeforeStart} onPress={() => editFromCalendar(calendarDetailDate)} style={{ flex: 1 }} />
+                      <Btn label="Close" variant="secondary" onPress={() => setCalendarDetailDate(null)} style={{ flex: 1 }} />
                     </View>
                   </>
                 )}
@@ -1609,151 +928,73 @@ function Root() {
   };
 
   const renderSettings = () => (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.subtitle}>Everything is kept offline on this device.</Text>
-
         <Card>
-          <CardTitle icon="time-outline" title="Plan" />
-          <NumberField
-            label="Required hours"
-            value={appData.settings.requiredHours || 486}
-            min={1}
-            max={5000}
-            suffix="h"
-            onCommit={(v) => updateSettings({ requiredHours: v })}
-          />
-          <NumberField
-            label="Soft cap per day"
-            value={appData.settings.maxHoursPerDay || 12}
-            min={1}
-            max={24}
-            suffix="h"
-            onCommit={(v) => updateSettings({ maxHoursPerDay: v })}
-          />
-          <DateField
-            label="OJT start date"
-            value={appData.settings.startDate}
-            onChange={(v) => updateSettings({ startDate: v })}
-          />
-          <DateField
-            label="Deadline"
-            value={appData.settings.deadline}
-            onChange={(v) => updateSettings({ deadline: v })}
-          />
-          <DateField
-            label="Last render day"
-            value={appData.settings.lastRenderDay}
-            onChange={(v) => updateSettings({ lastRenderDay: v })}
-          />
+          <CardTitle title="Plan" />
+          <NumberField label="Required hours" value={appData.settings.requiredHours || 486} min={1} max={5000} suffix="h" onCommit={(v) => updateSettings({ requiredHours: v })} />
+          <NumberField label="Soft cap per day" value={appData.settings.maxHoursPerDay || 12} min={1} max={24} suffix="h" onCommit={(v) => updateSettings({ maxHoursPerDay: v })} />
+          <DateField label="OJT start date" value={appData.settings.startDate} onChange={(v) => updateSettings({ startDate: v })} />
+          <DateField label="Deadline & last render day" value={appData.settings.deadline} onChange={(v) => updateSettings({ deadline: v, lastRenderDay: v })} />
         </Card>
-
         <Card>
-          <CardTitle icon="briefcase-outline" title="Workdays" />
+          <CardTitle title="Workdays" />
           {renderWorkdayChips()}
         </Card>
         <Card>
-          <CardTitle
-            icon="ban-outline"
-            title="Excluded dates"
-            hint="Tap a date to remove it. Add your own below."
-          />
+          <CardTitle title="Excluded dates" hint="Days that don't count toward your schedule." />
 
-          {/* Built-in Holidays (Interactive) */}
-          <Text style={[styles.label, { marginTop: 0 }]}>Built-in holidays</Text>
-          <Text style={styles.inputHint}>
-            Tap to remove if your company works on these days.
-          </Text>
+          <Text style={[styles.label, { marginTop: space.sm }]}>Built-in holidays</Text>
+          <Text style={styles.inputHint}>Tap to remove if your company works on these days.</Text>
           <View style={styles.tagContainer}>
             {appData.settings.holidays.length === 0 ? (
               <Text style={styles.metaText}>No built-in holidays remaining.</Text>
             ) : (
               appData.settings.holidays.map((value) => (
-                <Pressable
-                  key={value}
-                  accessibilityLabel={`Remove ${formatDateLabel(value)}`}
-                  style={[styles.tag, styles.tagMuted]}
+                <Pressable key={value} accessibilityLabel={`Remove ${formatDateLabel(value)}`} style={[styles.tag, styles.tagMuted]}
                   onPress={() => {
-                    Alert.alert(
-                      'Remove built-in holiday?',
-                      `Are you sure you want to remove ${formatDateLabel(value)}? You will be expected to render on this day.`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Remove',
-                          style: 'destructive',
-                          onPress: () => {
-                            updateSettings({
-                              holidays: appData.settings.holidays.filter((d) => d !== value),
-                            });
-                          },
-                        },
-                      ]
-                    );
-                  }}
-                >
-                  <Text style={[styles.tagText, styles.tagTextMuted]}>
-                    {formatDateLabel(value)}
-                    {HOLIDAY_NAMES[value] ? ` · ${HOLIDAY_NAMES[value]}` : ''}
-                  </Text>
-                  <Ionicons name="close" size={14} color={colors.textSecondary} />
+                    Alert.alert('Remove built-in holiday?', `Are you sure you want to remove ${formatDateLabel(value)}? You will be expected to render on this day.`, [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Remove', style: 'destructive', onPress: () => { updateSettings({ holidays: appData.settings.holidays.filter((d) => d !== value) }); } },
+                    ]);
+                  }}>
+                  <Text style={[styles.tagText, styles.tagTextMuted]}>{formatDateLabel(value)}{HOLIDAY_NAMES[value] ? ` · ${HOLIDAY_NAMES[value]}` : ''}</Text>
+                  <Ionicons name="close" size={13} color={colors.textSecondary} />
                 </Pressable>
               ))
             )}
           </View>
 
-          {/* Custom Exclusions */}
-          <Text style={[styles.label, { marginTop: space.lg }]}>Your custom exclusions</Text>
+          <View style={styles.divider} />
+
+          <Text style={[styles.label, { marginTop: 0 }]}>Your custom exclusions</Text>
           {appData.settings.customExclusions.length === 0 ? (
             <Text style={styles.metaText}>No custom exclusions yet.</Text>
           ) : (
             <View style={styles.tagContainer}>
               {appData.settings.customExclusions.map((value) => (
-                <Pressable
-                  key={value}
-                  accessibilityLabel={`Remove ${formatDateLabel(value)}`}
-                  style={styles.tag}
+                <Pressable key={value} accessibilityLabel={`Remove ${formatDateLabel(value)}`} style={styles.tag}
                   onPress={() => {
-                    Alert.alert(
-                      'Remove exclusion?',
-                      `Remove ${formatDateLabel(value)} from your excluded dates?`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Remove',
-                          style: 'destructive',
-                          onPress: () => {
-                            const nextNames = { ...appData.settings.customExclusionNames };
-                            delete nextNames[value];
-                            updateSettings({
-                              customExclusions: appData.settings.customExclusions.filter((item) => item !== value),
-                              customExclusionNames: nextNames,
-                            });
-                          },
-                        },
-                      ]
-                    );
-                  }}
-                >
-                  <Text style={styles.tagText}>
-                    {formatDateLabel(value)}
-                    {appData.settings.customExclusionNames?.[value] ? ` · ${appData.settings.customExclusionNames[value]}` : ''}
-                  </Text>
-                  <Ionicons name="close" size={14} color={colors.textPrimary} />
+                    Alert.alert('Remove exclusion?', `Remove ${formatDateLabel(value)} from your excluded dates?`, [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Remove', style: 'destructive', onPress: () => {
+                          const nextNames = { ...appData.settings.customExclusionNames };
+                          delete nextNames[value];
+                          updateSettings({ customExclusions: appData.settings.customExclusions.filter((item) => item !== value), customExclusionNames: nextNames });
+                        }
+                      },
+                    ]);
+                  }}>
+                  <Text style={styles.tagText}>{formatDateLabel(value)}{appData.settings.customExclusionNames?.[value] ? ` · ${appData.settings.customExclusionNames[value]}` : ''}</Text>
+                  <Ionicons name="close" size={13} color={colors.textPrimary} />
                 </Pressable>
               ))}
             </View>
           )}
 
-          {/* Add Custom Exclusion (with name prompt) */}
           <View style={{ marginTop: space.md }}>
             <AddExclusionButton
               onPick={(dateKey) => {
@@ -1761,105 +1002,51 @@ function Root() {
                   Alert.alert('Already added', 'That date is already excluded.');
                   return;
                 }
-
-                // Show prompt for the name
-                Alert.prompt(
-                  'Name this exclusion',
-                  `Why are you excluding ${formatDateLabel(dateKey)}? (e.g. Typhoon, Company Event)`,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Save',
-                      onPress: (name) => {
-                        const nextNames = { ...appData.settings.customExclusionNames };
-                        if (name && name.trim()) {
-                          nextNames[dateKey] = name.trim();
-                        }
-                        updateSettings({
-                          customExclusions: [...appData.settings.customExclusions, dateKey].sort(),
-                          customExclusionNames: nextNames,
-                        });
-                      },
-                    },
-                  ],
-                  'plain-text'
-                );
+                setPendingExclusionDate(dateKey);
+                setExclusionNameInput('');
+                setShowExclusionModal(true);
               }}
             />
           </View>
         </Card>
-
         <Card>
-          <CardTitle
-            icon="notifications-outline"
-            title="Daily reminder"
-            hint="A local reminder at 6:00 PM to log your hours."
-          />
-          {reminderOn ? (
-            <Btn label="Turn off reminder" icon="notifications-off-outline" variant="secondary" onPress={disableReminder} />
-          ) : (
-            <Btn label="Remind me at 6:00 PM" icon="notifications-outline" onPress={enableReminder} />
-          )}
+          <CardTitle title="Daily reminder" hint="A local reminder at 6:00 PM to log your hours." />
+          {reminderOn ? <Btn label="Turn off reminder" variant="secondary" onPress={disableReminder} /> : <Btn label="Remind me at 6:00 PM" onPress={enableReminder} />}
         </Card>
-
         <Card>
-          <CardTitle
-            icon="cloud-upload-outline"
-            title="Backup"
-            hint={
-              appData.lastExportedAt
-                ? `Last exported ${formatDateLabel(String(appData.lastExportedAt).slice(0, 10))}. Your data only lives on this phone, so export now and then.`
-                : 'You have not exported a backup yet. Your data only lives on this phone.'
-            }
-          />
-          <Btn label="Export backup" icon="share-outline" onPress={handleBackupExport} />
+          <CardTitle title="Backup" hint={appData.lastExportedAt ? `Last exported ${formatDateLabel(String(appData.lastExportedAt).slice(0, 10))}.` : 'You have not exported a backup yet.'} />
+          <Btn label="Export backup" onPress={handleBackupExport} />
           <View style={{ height: space.sm }} />
-          <Btn label="Import backup" icon="download-outline" variant="secondary" onPress={handleBackupImport} />
+          <Btn label="Import backup" variant="secondary" onPress={handleBackupImport} />
         </Card>
-
         <Card>
-          <CardTitle icon="warning-outline" title="Danger zone" />
-          <Btn label="Reset all data" icon="refresh" variant="danger" onPress={confirmResetAll} />
+          <CardTitle title="Danger zone" hint="Deletes every log and setting on this device." />
+          <Btn label="Reset all data" variant="danger" onPress={confirmResetAll} />
         </Card>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 
   if (isLoading) {
-    return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <Text style={styles.loadingText}>Loading OJT Tracker…</Text>
-      </SafeAreaView>
-    );
+    return <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}><Text style={styles.loadingText}>Loading…</Text></SafeAreaView>;
   }
 
   if (screen === 'onboarding') {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          {renderOnboarding()}
-        </KeyboardAvoidingView>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>{renderOnboarding()}</KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <View style={{ flex: 1 }}>
         {screen === 'dashboard' && renderDashboard()}
         {screen === 'daily-log' && renderDailyLog()}
         {screen === 'calendar' && renderCalendar()}
         {screen === 'settings' && renderSettings()}
-
-        {toast ? (
-          <View pointerEvents="none" style={[styles.toast, { bottom: space.lg }]}>
-            <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-            <Text style={styles.toastText}>{toast}</Text>
-          </View>
-        ) : null}
+        {toast ? (<View pointerEvents="none" style={[styles.toast, { bottom: space.lg }]}><Text style={styles.toastText}>{toast}</Text></View>) : null}
       </View>
 
       {!kbVisible && (
@@ -1867,74 +1054,49 @@ function Root() {
           {TABS.map((tab) => {
             const active = screen === tab.key;
             return (
-              <Pressable
-                key={tab.key}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={tab.label}
-                style={styles.tabItem}
-                onPress={() => setScreen(tab.key)}
-              >
-                <View style={[styles.tabIconWrap, active && styles.tabIconWrapActive]}>
-                  <Ionicons
-                    name={active ? tab.iconActive : tab.icon}
-                    size={22}
-                    color={active ? colors.primary : colors.textSecondary}
-                  />
-                </View>
-                <Text style={[styles.tabText, active && styles.tabTextActive]} numberOfLines={1}>
-                  {tab.label}
-                </Text>
+              <Pressable key={tab.key} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} style={styles.tabItem} onPress={() => setScreen(tab.key)}>
+                <Ionicons name={active ? tab.iconActive : tab.icon} size={22} color={active ? colors.primary : colors.neutral} />
+                <Text style={[styles.tabText, active && styles.tabTextActive]} numberOfLines={1}>{tab.label}</Text>
               </Pressable>
             );
           })}
         </View>
       )}
 
-      <Modal
-        visible={showPasteImport}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPasteImport(false)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+      <Modal visible={showExclusionModal} transparent animationType="fade" onRequestClose={() => setShowExclusionModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowExclusionModal(false)} />
+            <View style={styles.pickerSheet}>
+              <Text style={styles.sheetTitle}>Name this exclusion</Text>
+              <Text style={[styles.inputHint, { marginTop: 6 }]}>Excluding {formatDateLabel(pendingExclusionDate)}. Why? (e.g. Typhoon, Company event)</Text>
+              <TextInput style={[styles.input, { marginTop: space.md }]} value={exclusionNameInput} onChangeText={setExclusionNameInput} placeholder="e.g. Typhoon" placeholderTextColor={colors.neutral} autoFocus />
+              <View style={[styles.sheetActions, { marginTop: space.lg }]}>
+                <Btn label="Save" onPress={() => {
+                  const nextNames = { ...appData.settings.customExclusionNames };
+                  if (exclusionNameInput.trim()) { nextNames[pendingExclusionDate] = exclusionNameInput.trim(); }
+                  updateSettings({ customExclusions: [...appData.settings.customExclusions, pendingExclusionDate].sort(), customExclusionNames: nextNames });
+                  setShowExclusionModal(false);
+                }} style={{ flex: 1 }} />
+                <Btn label="Cancel" variant="secondary" onPress={() => setShowExclusionModal(false)} style={{ flex: 1 }} />
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={showPasteImport} transparent animationType="slide" onRequestClose={() => setShowPasteImport(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalOverlay}>
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowPasteImport(false)} />
             <View style={[styles.sheet, { paddingBottom: space.lg + insets.bottom }]}>
               <View style={styles.sheetHandle} />
               <Text style={styles.sheetTitle}>Paste your backup</Text>
-              <Text style={styles.inputHint}>
-                Paste the whole backup text you exported. This replaces all data on this device.
-              </Text>
-              <TextInput
-                style={[styles.input, styles.pasteInput]}
-                multiline
-                value={pasteText}
-                onChangeText={setPasteText}
-                placeholder="Paste backup text here"
-                placeholderTextColor={colors.textSecondary}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
+              <Text style={[styles.inputHint, { marginTop: 6 }]}>Paste the whole backup text you exported. This replaces all data on this device.</Text>
+              <TextInput style={[styles.input, styles.pasteInput]} multiline value={pasteText} onChangeText={setPasteText} placeholder="Paste backup text here" placeholderTextColor={colors.neutral} autoCorrect={false} autoCapitalize="none" />
               <View style={styles.sheetActions}>
-                <Btn
-                  label="Restore"
-                  icon="download-outline"
-                  onPress={confirmPasteImport}
-                  style={{ flex: 1 }}
-                />
-                <Btn
-                  label="Cancel"
-                  variant="secondary"
-                  onPress={() => {
-                    setShowPasteImport(false);
-                    setPasteText('');
-                  }}
-                  style={{ flex: 1 }}
-                />
+                <Btn label="Restore" onPress={confirmPasteImport} style={{ flex: 1 }} />
+                <Btn label="Cancel" variant="secondary" onPress={() => { setShowPasteImport(false); setPasteText(''); }} style={{ flex: 1 }} />
               </View>
             </View>
           </View>
@@ -1944,353 +1106,156 @@ function Root() {
   );
 }
 
-// ---------- styles ----------
+const HAIR = StyleSheet.hairlineWidth;
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
 
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    paddingTop: space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
-  },
-  tabItem: { flex: 1, alignItems: 'center' },
-  tabIconWrap: {
-    paddingHorizontal: 18,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  tabIconWrapActive: { backgroundColor: colors.primarySoft },
-  tabText: { color: colors.textSecondary, fontWeight: '600', fontSize: 11, marginTop: 2 },
-  tabTextActive: { color: colors.primary, fontWeight: '800' },
+  // Tab bar
+  tabBar: { flexDirection: 'row', backgroundColor: colors.card, paddingTop: 8, borderTopWidth: HAIR, borderTopColor: colors.border },
+  tabItem: { flex: 1, alignItems: 'center', gap: 3 },
+  tabText: { color: colors.neutral, fontWeight: '500', fontSize: 11 },
+  tabTextActive: { color: colors.primary, fontWeight: '600' },
 
+  // Layout / type
   content: { padding: space.lg, paddingBottom: 40 },
-  title: { fontSize: 28, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
+  title: { fontSize: 26, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.4, marginBottom: 4 },
   subtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: space.lg },
-  label: {
-    fontSize: 13,
-    color: colors.textPrimary,
-    fontWeight: '700',
-    marginTop: space.md,
-    marginBottom: space.sm,
-  },
+  subtitleTop: { fontSize: 13, color: colors.textSecondary, marginBottom: 2 },
+  label: { fontSize: 13, color: colors.textPrimary, fontWeight: '600', marginTop: space.md, marginBottom: 6 },
+  groupLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: '600', marginBottom: space.sm },
   inputHint: { fontSize: 12, color: colors.textSecondary, marginTop: 4, lineHeight: 17 },
+  divider: { height: HAIR, backgroundColor: colors.border, marginVertical: space.md },
+
+  // Inputs
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  inputSuffix: { color: colors.textSecondary, fontWeight: '700', fontSize: 15 },
-  input: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: radius.md,
-    paddingHorizontal: space.md,
-    paddingVertical: 12,
-    color: colors.textPrimary,
-    fontSize: 15,
-  },
-  inputButton: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: radius.md,
-    paddingHorizontal: space.md,
-    paddingVertical: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  inputButtonText: { color: colors.textPrimary, fontWeight: '600', fontSize: 15 },
+  inputSuffix: { color: colors.textSecondary, fontWeight: '500', fontSize: 15, width: 18 },
+  input: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 11, color: colors.textPrimary, fontSize: 15 },
+  inputButton: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  inputButtonText: { color: colors.textPrimary, fontWeight: '500', fontSize: 15 },
   textArea: { minHeight: 110, textAlignVertical: 'top' },
-  pasteInput: {
-    minHeight: 160,
-    maxHeight: 260,
-    textAlignVertical: 'top',
-    marginTop: space.sm,
-  },
+  pasteInput: { minHeight: 160, maxHeight: 260, textAlignVertical: 'top', marginTop: space.sm },
 
-  btn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    paddingVertical: 14,
-    paddingHorizontal: space.md,
-  },
+  // Buttons
+  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, minHeight: 48, paddingHorizontal: space.md },
   btnPrimary: { backgroundColor: colors.primary },
-  btnSecondary: { backgroundColor: colors.primarySoft },
-  btnDanger: { backgroundColor: colors.dangerSoft },
-  btnText: { fontWeight: '800', fontSize: 15 },
+  btnSecondary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.borderStrong },
+  btnDanger: { backgroundColor: colors.card, borderWidth: 1, borderColor: '#E8C4C4' },
+  btnText: { fontWeight: '600', fontSize: 15 },
 
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: space.lg,
-    marginBottom: space.md,
-    shadowColor: '#0A2540',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  // Cards
+  card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: HAIR, borderColor: colors.border, padding: space.lg, marginBottom: space.md },
+  cardTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
 
-  heroCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: space.lg,
-    marginBottom: space.md,
-    shadowColor: '#0A2540',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  heroHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: space.sm,
-  },
-  heroEyebrow: { color: colors.textSecondary, fontWeight: '700', fontSize: 13 },
-  heroValue: { fontSize: 52, fontWeight: '800', color: colors.textPrimary, marginVertical: 4 },
-  heroUnit: { fontSize: 24, fontWeight: '700', color: colors.textSecondary },
-  heroFooter: { color: colors.textSecondary, marginTop: space.sm, fontSize: 13 },
-  statusPill: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5 },
-  statusPillText: { fontSize: 12, fontWeight: '800' },
-
-  progressTrack: {
-    height: 10,
-    borderRadius: radius.pill,
-    backgroundColor: '#EEF2F7',
-    overflow: 'hidden',
-    marginTop: space.sm,
-  },
+  // Hero
+  heroCard: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: HAIR, borderColor: colors.border, padding: space.lg, marginTop: space.md, marginBottom: space.md },
+  heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroEyebrow: { color: colors.textSecondary, fontWeight: '500', fontSize: 13 },
+  heroValue: { fontSize: 56, fontWeight: '600', color: colors.textPrimary, letterSpacing: -1.5, marginTop: 6, marginBottom: 4, fontVariant: ['tabular-nums'] },
+  heroUnit: { fontSize: 22, fontWeight: '500', color: colors.textSecondary, letterSpacing: 0 },
+  heroFooterRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  heroFooter: { color: colors.textSecondary, fontSize: 13, fontVariant: ['tabular-nums'] },
+  progressTrack: { height: 6, borderRadius: radius.pill, backgroundColor: colors.neutralSoft, overflow: 'hidden', marginTop: space.sm },
   progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: radius.pill },
 
+  // Status
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusText: { fontSize: 13, fontWeight: '600' },
+
+  // Today / overview
   todayRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-
-  metaGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: space.xs },
+  metaGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 2 },
   metaItem: { width: '50%', paddingVertical: 8 },
-  metaLabel: { color: colors.textSecondary, fontSize: 12, marginBottom: 2, fontWeight: '600' },
-  metaValue: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
-  metaText: { color: colors.textSecondary, marginTop: space.sm },
+  metaLabel: { color: colors.textSecondary, fontSize: 12, marginBottom: 2, fontWeight: '500' },
+  metaValue: { color: colors.textPrimary, fontSize: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  metaText: { color: colors.textSecondary, marginTop: space.sm, fontSize: 13 },
+  helperText: { color: colors.textSecondary, marginTop: 4, fontSize: 14, lineHeight: 20 },
+  helperStrong: { color: colors.textPrimary, fontWeight: '600' },
+  warnText: { color: colors.warn, fontWeight: '600', fontSize: 15 },
+  kvRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 11, borderBottomWidth: HAIR, borderBottomColor: colors.border },
+  kvLabel: { color: colors.textSecondary, fontSize: 14 },
+  kvValue: { color: colors.textPrimary, fontSize: 14, fontWeight: '600', flexShrink: 1, textAlign: 'right', marginLeft: space.md },
 
-  helperText: { color: colors.textSecondary, marginTop: 6, fontSize: 14, lineHeight: 20 },
-  helperStrong: { color: colors.textPrimary, fontWeight: '700' },
-  warnText: { color: colors.warn, fontWeight: '800', fontSize: 16 },
-
+  // Chips
   chipRow: { flexDirection: 'row', gap: 6 },
-  chip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: radius.md,
-    backgroundColor: '#F3F4F6',
-  },
-  chipOn: { backgroundColor: colors.primary },
-  chipText: { color: colors.textSecondary, fontWeight: '700', fontSize: 12 },
+  chip: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: radius.md, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.textSecondary, fontWeight: '600', fontSize: 12 },
   chipTextOn: { color: '#FFFFFF' },
 
-  dateNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: space.sm,
-    marginTop: space.sm,
-    marginBottom: space.md,
-  },
-  dateNavCenter: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-  },
-  dateNavText: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
-  dateNavSub: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  // Daily log
+  dateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, marginTop: space.sm, marginBottom: space.md },
+  dateNavCenter: { flex: 1, alignItems: 'center', paddingVertical: 8 },
+  dateNavText: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
+  dateNavSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   jumpToday: { alignSelf: 'center', marginBottom: space.md, paddingVertical: 4 },
-  jumpTodayText: { color: colors.primary, fontWeight: '700' },
-
+  jumpTodayText: { color: colors.primary, fontWeight: '600', fontSize: 14 },
   timeRow: { flexDirection: 'row', gap: space.sm },
   timeFieldWrap: { flex: 1 },
-  fieldLabel: { fontWeight: '700', color: colors.textSecondary, marginBottom: 6, fontSize: 13 },
-  timeButton: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: radius.md,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  timeButtonSuggested: {
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
-  },
-  timeButtonText: { color: colors.textPrimary, fontWeight: '800', fontSize: 16 },
-  timeButtonTextSuggested: { color: colors.primary, fontSize: 14 },
-  timeClear: { position: 'absolute', right: 8 },
+  fieldLabel: { fontWeight: '500', color: colors.textSecondary, marginBottom: 6, fontSize: 12 },
+  timeButton: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 13, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
+  timeButtonText: { color: colors.textPrimary, fontWeight: '600', fontSize: 16, fontVariant: ['tabular-nums'] },
+  timeButtonTextSuggested: { color: colors.neutral, fontWeight: '500', fontSize: 15 },
+  timeClear: { position: 'absolute', right: 10 },
   quickRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.md },
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  totalValue: { fontSize: 30, fontWeight: '800', color: colors.textPrimary },
+  totalValue: { fontSize: 30, fontWeight: '600', color: colors.textPrimary, letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
 
-  calHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: space.sm,
-  },
-  calNavBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calMonthLabel: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
+  // Calendar
+  calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.md },
+  calNavBtn: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  calMonthLabel: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
   calWeekRow: { flexDirection: 'row', marginBottom: 4 },
-  calWeekLabel: {
-    flex: 1,
-    textAlign: 'center',
-    color: colors.textSecondary,
-    fontWeight: '700',
-    fontSize: 12,
-  },
+  calWeekLabel: { flex: 1, textAlign: 'center', color: colors.textSecondary, fontWeight: '500', fontSize: 12 },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calCell: {
-    width: '14.2857%',
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2,
-  },
-  calCircle: {
-    width: '100%',
-    height: '100%',
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calCircleLogged: { backgroundColor: colors.primary },
-  calCircleMissed: { backgroundColor: colors.warnSoft },
-  calCircleToday: { borderWidth: 2, borderColor: colors.primary },
-  calCircleOff: { backgroundColor: '#F1F5F9' },
-  calCircleHoliday: { backgroundColor: colors.dangerSoft },
-  calCircleExcluded: { backgroundColor: EXCLUDED.bg },
-  calDayNum: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  calDayNumLogged: { color: '#FFFFFF' },
-  calDayNumExcluded: { color: colors.textSecondary, fontWeight: '500' },
-  calHours: { fontSize: 9, fontWeight: '700', color: '#FFFFFF', marginTop: 1 },
+  calCell: { width: '14.2857%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', padding: 2 },
+  calCircle: { width: '100%', height: '100%', borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  calCircleLogged: { backgroundColor: colors.primary, borderColor: colors.primary },
+  calCircleMissed: { backgroundColor: colors.warnSoft, borderColor: '#EBD3A8' },
+  calCircleToday: { borderWidth: 1.5, borderColor: colors.primary },
+  calCircleOff: { backgroundColor: 'transparent', borderColor: 'transparent' },
+  calCircleHoliday: { backgroundColor: colors.dangerSoft, borderColor: '#EBC9C9' },
+  calCircleExcluded: { backgroundColor: EXCLUDED.bg, borderColor: colors.border },
+  calDayNum: { fontSize: 14, fontWeight: '500', color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  calDayNumLogged: { color: '#FFFFFF', fontWeight: '600' },
+  calDayNumExcluded: { color: colors.neutral, fontWeight: '400' },
+  calHours: { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.85)', marginTop: 1 },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginTop: space.md },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 8, height: 8, borderRadius: 2 },
+  legendText: { fontSize: 12, color: colors.textSecondary },
 
-  legendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: space.md,
-  },
-  legendChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 12, fontWeight: '700' },
-
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(10,37,64,0.35)' },
-  pickerSheet: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    padding: space.lg,
-    paddingBottom: 32,
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: space.sm,
-  },
-  pickerCancel: { color: colors.textSecondary, fontWeight: '700', fontSize: 16 },
-  pickerDone: { color: colors.primary, fontWeight: '800', fontSize: 16 },
-  sheet: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    padding: space.lg,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E2E8F0',
-    marginBottom: space.sm,
-  },
-  sheetHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: space.sm,
-  },
-  sheetTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
+  // Sheets / modals
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,27,0.4)' },
+  pickerSheet: { backgroundColor: colors.card, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: space.lg, paddingBottom: 32 },
+  pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: space.sm },
+  pickerCancel: { color: colors.textSecondary, fontWeight: '500', fontSize: 16 },
+  pickerDone: { color: colors.primary, fontWeight: '600', fontSize: 16 },
+  sheet: { backgroundColor: colors.card, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: space.lg },
+  sheetHandle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: space.md },
+  sheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.sm },
+  sheetTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
   sheetGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: space.xs },
   sheetItem: { width: '50%', paddingVertical: 6 },
-  sheetLabel: { color: colors.textSecondary, fontSize: 12, marginBottom: 2, fontWeight: '600' },
-  sheetValue: { color: colors.textPrimary, fontSize: 16, fontWeight: '700' },
+  sheetLabel: { color: colors.textSecondary, fontSize: 12, marginBottom: 2, fontWeight: '500' },
+  sheetValue: { color: colors.textPrimary, fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'] },
   sheetMeta: { color: colors.textSecondary, marginTop: space.sm, fontSize: 14 },
-  notesBox: {
-    marginTop: space.sm,
-    backgroundColor: '#F8FAFC',
-    borderRadius: radius.md,
-    padding: space.md,
-  },
-  notesText: { color: colors.textPrimary, marginTop: 4 },
+  notesBox: { marginTop: space.sm, backgroundColor: colors.bg, borderRadius: radius.md, padding: space.md },
+  notesText: { color: colors.textPrimary, marginTop: 4, lineHeight: 20 },
   sheetActions: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+  reasonBox: { borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: 10, marginTop: space.sm },
+  reasonText: { fontWeight: '600', fontSize: 13 },
 
-  reasonBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: radius.md,
-    paddingHorizontal: space.md,
-    paddingVertical: 10,
-    marginTop: space.sm,
-  },
-  reasonText: { fontWeight: '700', fontSize: 13, flex: 1 },
-
+  // Tags
   tagContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: space.sm, gap: 8 },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  tagText: { color: colors.textPrimary, fontWeight: '700', fontSize: 13 },
-  tagMuted: { backgroundColor: '#F1F5F9' },
-  tagTextMuted: { color: colors.textSecondary, fontWeight: '600' },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.sm, paddingHorizontal: 10, paddingVertical: 6 },
+  tagText: { color: colors.textPrimary, fontWeight: '500', fontSize: 13 },
+  tagMuted: { backgroundColor: colors.neutralSoft, borderColor: colors.border },
+  tagTextMuted: { color: colors.textSecondary },
 
-  toast: {
-    position: 'absolute',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#0F172A',
-    borderRadius: radius.pill,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
-
-  loadingText: {
-    fontSize: 18,
-    textAlign: 'center',
-    marginTop: 48,
-    color: colors.textPrimary,
-  },
+  // Toast / loading
+  toast: { position: 'absolute', alignSelf: 'center', backgroundColor: '#18181B', borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 10 },
+  toastText: { color: '#FFFFFF', fontWeight: '500', fontSize: 14 },
+  loadingText: { fontSize: 15, textAlign: 'center', marginTop: 48, color: colors.textSecondary },
 });
